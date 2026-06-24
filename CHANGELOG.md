@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 - 2026-06-25
+
+### Fixed
+
+- Fix generated `chatarch` publish workflow to match ChatArch Trusted Publisher defaults: no default `environment: pypi`, workflow-level `contents: read`, job-level `id-token: write`.
+
 ## 0.1.2 - 2026-06-25
 
 ### Fixed

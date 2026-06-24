@@ -195,9 +195,9 @@ def test_chatpypi_init_chatarch_template(tmp_path):
         encoding="utf-8"
     )
     assert 'tags:\n      - "v*"' in publish_text
-    assert "contents: write" in publish_text
+    assert "contents: read" in publish_text
     assert "id-token: write" in publish_text
-    assert "environment: pypi" in publish_text
+    assert "environment: pypi" not in publish_text
     assert "Check tag matches package version" in publish_text
     assert "GITHUB_REF_NAME" in publish_text
     assert "git tag -a" not in publish_text
