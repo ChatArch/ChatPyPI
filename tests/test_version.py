@@ -1,11 +1,13 @@
 from pathlib import Path
+import logging
 
 import chatpypi
+from chatpypi import CommandResult
 from chatpypi import __version__
 
 
 def test_version_present():
-    assert __version__ == "0.1.3"
+    assert __version__ == "0.1.4"
 
 
 def test_public_package_api_exports_core_helpers(tmp_path):
@@ -39,3 +41,45 @@ def test_scaffold_package_importable_api_creates_project(tmp_path):
     assert result.module_name == "demopkg"
     assert (project_dir / "pyproject.toml").exists()
     assert (project_dir / "src" / "demopkg" / "__init__.py").exists()
+
+
+def test_runtime_dependencies_include_build_and_twine():
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+
+    assert '"build>=1.2.0,<2.0.0"' in text
+    assert '"twine>=6.0.0,<7.0.0"' in text
+
+
+def test_build_package_logs_and_returns_artifacts(tmp_path, caplog):
+    project_dir = tmp_path / "DemoBuild"
+    project_dir.mkdir()
+    (project_dir / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+
+    def fake_runner(args, cwd):
+        dist_dir = Path(args[args.index("--outdir") + 1])
+        dist_dir.mkdir(parents=True, exist_ok=True)
+        (dist_dir / "demo-0.1.0-py3-none-any.whl").write_text(
+            "wheel", encoding="utf-8"
+        )
+        return CommandResult(args=list(args), returncode=0, stdout="built", stderr="")
+
+    with caplog.at_level(logging.INFO, logger="chatpypi.main"):
+        result, files = chatpypi.build_package(project_dir, runner=fake_runner)
+
+    assert result.returncode == 0
+    assert [path.name for path in files] == ["demo-0.1.0-py3-none-any.whl"]
+    assert "Building package distributions" in caplog.text
+    assert "Built package distributions" in caplog.text
+
+
+def test_check_distributions_error_mentions_chatpypi_build(tmp_path):
+    project_dir = tmp_path / "EmptyDist"
+    project_dir.mkdir()
+
+    try:
+        chatpypi.check_distributions(project_dir)
+    except chatpypi.PyPICommandError as exc:
+        assert "Run `chatpypi build` first" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected PyPICommandError")

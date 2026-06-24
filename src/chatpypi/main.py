@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import importlib
 import json
 import importlib.util
+import logging
 from pathlib import Path
 import re
 import subprocess
@@ -21,6 +22,9 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 DEFAULT_DIST_DIRNAME = "dist"
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 LICENSE_TEMPLATES = {
     "MIT": """MIT License
 
@@ -1678,6 +1682,7 @@ def _clean_dist_dir(dist_dir: Path) -> None:
 def run_command(
     args: list[str], cwd: Path, env: dict[str, str] | None = None
 ) -> CommandResult:
+    logger.info("Running command", extra={"command_args": args, "cwd": str(cwd)})
     process = subprocess.run(
         args,
         cwd=str(cwd),
@@ -1685,6 +1690,10 @@ def run_command(
         capture_output=True,
         text=True,
         check=False,
+    )
+    logger.info(
+        "Command finished",
+        extra={"command_args": args, "cwd": str(cwd), "returncode": process.returncode},
     )
     return CommandResult(
         args=list(args),
@@ -1725,12 +1734,28 @@ def build_package(
     elif wheel and not sdist:
         args.append("--wheel")
 
+    logger.info(
+        "Building package distributions",
+        extra={"project_dir": str(project_dir), "dist_dir": str(dist_dir)},
+    )
     result = _ensure_success(runner(args, project_dir), "Build")
     files = find_distributions(dist_dir)
     if not files:
+        logger.error(
+            "Build completed without distributions",
+            extra={"project_dir": str(project_dir), "dist_dir": str(dist_dir)},
+        )
         raise PyPICommandError(
             f"Build completed but no distributions were found under {dist_dir}"
         )
+    logger.info(
+        "Built package distributions",
+        extra={
+            "project_dir": str(project_dir),
+            "dist_dir": str(dist_dir),
+            "artifact_count": len(files),
+        },
+    )
     return result, files
 
 
@@ -1746,14 +1771,30 @@ def check_distributions(
     files = find_distributions(dist_dir)
     if not files:
         raise PyPICommandError(
-            f"No distributions found under {dist_dir}. Run `chattool pypi build` first."
+            f"No distributions found under {dist_dir}. Run `chatpypi build` first."
         )
 
     args = [sys.executable, "-m", "twine", "check"]
     if strict:
         args.append("--strict")
     args.extend(str(path) for path in files)
+    logger.info(
+        "Checking package distributions",
+        extra={
+            "project_dir": str(project_dir),
+            "dist_dir": str(dist_dir),
+            "artifact_count": len(files),
+        },
+    )
     result = _ensure_success(runner(args, project_dir), "Twine check")
+    logger.info(
+        "Checked package distributions",
+        extra={
+            "project_dir": str(project_dir),
+            "dist_dir": str(dist_dir),
+            "artifact_count": len(files),
+        },
+    )
     return result, files
 
 
@@ -1769,12 +1810,28 @@ def upload_distributions(
     files = find_distributions(dist_dir)
     if not files:
         raise PyPICommandError(
-            f"No distributions found under {dist_dir}. Run `chattool pypi build` first."
+            f"No distributions found under {dist_dir}. Run `chatpypi build` first."
         )
 
     args = [sys.executable, "-m", "twine", "upload"]
     if skip_existing:
         args.append("--skip-existing")
     args.extend(str(path) for path in files)
+    logger.info(
+        "Uploading package distributions",
+        extra={
+            "project_dir": str(project_dir),
+            "dist_dir": str(dist_dir),
+            "artifact_count": len(files),
+        },
+    )
     result = _ensure_success(runner(args, project_dir), "Twine upload")
+    logger.info(
+        "Uploaded package distributions",
+        extra={
+            "project_dir": str(project_dir),
+            "dist_dir": str(dist_dir),
+            "artifact_count": len(files),
+        },
+    )
     return result, files
