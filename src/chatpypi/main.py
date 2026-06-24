@@ -1051,13 +1051,14 @@ def scaffold_package(
                       workflow_dispatch:
 
                     permissions:
-                      contents: write
-                      id-token: write
+                      contents: read
 
                     jobs:
                       publish:
                         runs-on: ubuntu-latest
-                        environment: pypi
+                        permissions:
+                          contents: read
+                          id-token: write
                         steps:
                           - uses: actions/checkout@v4
                             with:
