@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ChatPyPI"
+dynamic = ["version"]
+description = "ChatPyPI: ChatArch Python package lifecycle helper extracted from ChatTool."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["click>=8.0", "chatstyle>=0.1.0,<0.2.0", "chatenv>=0.2.0,<0.3.0"]
+authors = [{name = "ChatArch", email = "1073853456@qq.com"}]
+keywords = ["chatpypi", "chatarch", "cli"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChatArch/ChatPyPI"
+Repository = "https://github.com/ChatArch/ChatPyPI"
+Documentation = "https://ChatArch.github.io/ChatPyPI"
+
+[project.scripts]
+chatpypi = "chatpypi.cli:main"
+
+[project.optional-dependencies]
+dev = ["build", "pytest", "twine"]
+docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mike>=2.0.0"]
+
+[tool.setuptools.dynamic]
+version = {attr = "chatpypi.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+include-package-data = true

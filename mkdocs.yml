@@ -1,0 +1,9 @@
+site_name: ChatPyPI 文档
+site_url: https://ChatArch.github.io/ChatPyPI
+repo_url: https://github.com/ChatArch/ChatPyPI
+theme:
+  name: material
+  language: zh
+nav:
+  - 首页: index.md
+  - English: index.en.md
