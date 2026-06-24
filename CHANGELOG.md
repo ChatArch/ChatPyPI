@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 - 2026-06-25
+
+### Fixed
+
+- Make `chatpypi build/check/upload` independent in clean installs by adding bounded runtime dependencies on `build` and `twine`.
+- Add package-operation logging for build/check/upload while keeping default CLI output stable.
+- Update stale `chattool pypi build` error text to `chatpypi build`.
+
 ## 0.1.3 - 2026-06-25
 
 ### Fixed
