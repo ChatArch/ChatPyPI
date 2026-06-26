@@ -22,7 +22,8 @@ chatpypi
 ├── project
 │   ├── list / show
 ├── publisher
-│   ├── list / pending-list / pending-add / pending-remove
+│   ├── list / detail / add-github
+│   ├── pending-list / pending-add / pending-remove
 ├── token
 │   ├── list / create / revoke
 ├── doctor
@@ -40,10 +41,10 @@ chatpypi
 - `auth session show`
 - `auth session clear`
 - `project list`：读取 `/manage/projects/`
-- `publisher list` / `publisher pending-list`：读取 `/manage/account/publishing/`
+- `publisher list` / `publisher detail` / `publisher add-github`：读取并直接配置已存在 PyPI project 的 active Trusted Publisher；`pending-*` 只用于新项目注册前 pending 例外或 stale pending 清理
 - `docs links|examples|open`
 
-注册、邮箱验证、2FA 初始化、token 创建/删除和 publisher 写操作仍按人工 checkpoint / browser-assist 边界处理。
+注册、邮箱验证、2FA 初始化、token 创建/删除等需要人工验证、二维码或复杂 checkpoint 的流程仍按 checkpoint / browser-assist 边界处理。已存在 PyPI project 的 Publisher 写操作不应 pending。
 
 兼容入口仍保留：
 

@@ -17,11 +17,15 @@ from chatpypi.config import (
 )
 from chatpypi.session_ops import (
     PyPISessionError,
+    add_github_publisher_to_project_from_payload,
+    add_pending_github_publisher_from_payload,
     decode_session_token,
     list_projects_from_session,
     list_publishers_from_session,
     load_session_payload_from_env,
     login_to_pypi,
+    publisher_detail_from_payload,
+    remove_pending_github_publisher_from_payload,
     validate_session_payload,
 )
 from chatstyle import INTERACTIVE_OPTION_HELP
@@ -1166,6 +1170,199 @@ def publisher_pending_list(env_profile: str | None, session_token_env: str, outp
         click.echo(f"- {item}")
 
 
+@publisher.command(name="detail")
+@click.argument("project")
+@click.option(
+    "-e",
+    "--env-profile",
+    default=None,
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def publisher_detail(project: str, env_profile: str | None, session_token_env: str, output_format: str):
+    """Show active trusted publisher details for an existing PyPI project."""
+    try:
+        payload = _load_session_payload_from_token_option(
+            None if env_profile else os.getenv(session_token_env),
+            session_token_env,
+            env_profile,
+        )
+        result = publisher_detail_from_payload(payload, project)
+    except (PyPISessionError, click.ClickException) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if output_format == "json":
+        _echo_json(result)
+        return
+    click.echo(f"project={result['project']}")
+    click.echo(f"source_url={result['source_url']}")
+    publishers = result.get("publisher_details") or []
+    if not publishers:
+        click.echo("publishers: []")
+        return
+    click.echo("publishers:")
+    for item in publishers:
+        click.echo(
+            f"- {item.get('publisher', 'unknown')} {item.get('repository', '')} "
+            f"workflow={item.get('workflow', '')} environment={item.get('environment', '')}"
+        )
+
+
+@publisher.command(name="add-github")
+@click.argument("project")
+@click.option("--owner", required=True, help="GitHub owner or organization, e.g. ChatArch.")
+@click.option("--repo", "repository", required=True, help="GitHub repository name.")
+@click.option("--workflow", default="publish.yml", show_default=True, help="Publishing workflow filename.")
+@click.option("--environment", default="", help="GitHub environment name. Leave blank for PyPI '(Any)'.")
+@click.option(
+    "-e",
+    "--env-profile",
+    default=None,
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def publisher_add_github(
+    project: str,
+    owner: str,
+    repository: str,
+    workflow: str,
+    environment: str,
+    env_profile: str | None,
+    session_token_env: str,
+    output_format: str,
+):
+    """Add or verify a GitHub trusted publisher for an existing PyPI project."""
+    try:
+        payload = _load_session_payload_from_token_option(
+            None if env_profile else os.getenv(session_token_env),
+            session_token_env,
+            env_profile,
+        )
+        result = add_github_publisher_to_project_from_payload(
+            payload,
+            project,
+            owner=owner,
+            repository=repository,
+            workflow=workflow,
+            environment=environment,
+        )
+    except (PyPISessionError, click.ClickException) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if output_format == "json":
+        _echo_json(result)
+        return
+    click.echo(f"project={project}")
+    click.echo(f"target={owner}/{repository} workflow={workflow} environment={result['target']['environment']}")
+    click.echo(f"already_active_before={result['already_active_before']}")
+    click.echo(f"posted={result['posted']}")
+    click.echo(f"ok={result['ok']}")
+
+
+@publisher.command(name="pending-add")
+@click.argument("project")
+@click.option("--owner", required=True, help="GitHub owner or organization, e.g. ChatArch.")
+@click.option("--repo", "repository", required=True, help="GitHub repository name.")
+@click.option("--workflow", default="publish.yml", show_default=True, help="Publishing workflow filename.")
+@click.option("--environment", default="", help="GitHub environment name. Leave blank for PyPI '(Any)'.")
+@click.option("-e", "--env-profile", default=None, help="Named PyPI ChatEnv profile.")
+@click.option("--session-token-env", default=SESSION_TOKEN_ENV, show_default=True, help="PyPI session token env key.")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", show_default=True)
+def publisher_pending_add(
+    project: str,
+    owner: str,
+    repository: str,
+    workflow: str,
+    environment: str,
+    env_profile: str | None,
+    session_token_env: str,
+    output_format: str,
+):
+    """Add a pending GitHub publisher for a project that does not exist yet.
+
+    Use this only for true pending pre-registration exceptions. For existing
+    projects, use `publisher add-github` instead.
+    """
+    try:
+        payload = _load_session_payload_from_token_option(
+            None if env_profile else os.getenv(session_token_env), session_token_env, env_profile
+        )
+        result = add_pending_github_publisher_from_payload(
+            payload, project, owner=owner, repository=repository, workflow=workflow, environment=environment
+        )
+    except (PyPISessionError, click.ClickException) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if output_format == "json":
+        _echo_json(result)
+        return
+    click.echo(f"project={project}")
+    click.echo(f"pending_target={owner}/{repository} workflow={workflow} environment={result['target']['environment']}")
+    click.echo(f"already_pending_before={result['already_pending_before']}")
+    click.echo(f"posted={result['posted']}")
+    click.echo(f"ok={result['ok']}")
+
+
+@publisher.command(name="pending-remove")
+@click.argument("project")
+@click.option("--owner", required=True, help="GitHub owner or organization, e.g. ChatArch.")
+@click.option("--repo", "repository", required=True, help="GitHub repository name.")
+@click.option("--workflow", default="publish.yml", show_default=True, help="Publishing workflow filename.")
+@click.option("--environment", default="", help="GitHub environment name. Leave blank for PyPI '(Any)'.")
+@click.option("-e", "--env-profile", default=None, help="Named PyPI ChatEnv profile.")
+@click.option("--session-token-env", default=SESSION_TOKEN_ENV, show_default=True, help="PyPI session token env key.")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text", show_default=True)
+def publisher_pending_remove(
+    project: str,
+    owner: str,
+    repository: str,
+    workflow: str,
+    environment: str,
+    env_profile: str | None,
+    session_token_env: str,
+    output_format: str,
+):
+    """Remove or confirm absence of a stale pending GitHub publisher."""
+    try:
+        payload = _load_session_payload_from_token_option(
+            None if env_profile else os.getenv(session_token_env), session_token_env, env_profile
+        )
+        result = remove_pending_github_publisher_from_payload(
+            payload, project, owner=owner, repository=repository, workflow=workflow, environment=environment
+        )
+    except (PyPISessionError, click.ClickException) as exc:
+        raise click.ClickException(str(exc)) from exc
+    if output_format == "json":
+        _echo_json(result)
+        return
+    click.echo(f"project={project}")
+    click.echo(f"removed={result['removed']}")
+    click.echo(f"ok={result['ok']}")
+
+
 @doctor.command(name="check")
 @click.option(
     "-e",
@@ -1236,16 +1433,6 @@ _planned_group_leaf(config, "get", "Planned to read one persisted ChatPyPI confi
 _planned_group_leaf(config, "set", "Planned to write one persisted ChatPyPI config key.")
 _planned_group_leaf(config, "unset", "Planned to remove one persisted ChatPyPI config key.")
 _planned_group_leaf(project, "show", "Planned to show one logged-in account PyPI project.")
-_planned_group_leaf(
-    publisher,
-    "pending-add",
-    "Planned as a checkpoint-aware browser-assisted publisher creation flow.",
-)
-_planned_group_leaf(
-    publisher,
-    "pending-remove",
-    "Planned as a checkpoint-aware browser-assisted publisher removal flow.",
-)
 _planned_group_leaf(token, "list", "Planned to list token summaries without revealing token values.")
 _planned_group_leaf(
     token,

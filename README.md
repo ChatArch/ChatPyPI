@@ -71,6 +71,8 @@ chatpypi
 │   └── show
 ├── publisher
 │   ├── list
+│   ├── detail
+│   ├── add-github
 │   ├── pending-list
 │   ├── pending-add
 │   └── pending-remove
@@ -92,10 +94,12 @@ chatpypi
 - `auth login`：使用用户名、密码和可选 TOTP 获取真实 PyPI 登录 session，并写入本地 session token
 - `auth whoami` / `auth session show|clear`：真实 session 验证与本地 session 摘要读取
 - `project list`：读取登录账号的 PyPI projects 页面
-- `publisher list` / `publisher pending-list`：读取登录账号的 Publishing 页面
+- `publisher list` / `publisher detail`：读取账号级和项目级 Trusted Publisher 状态
+- `publisher add-github`：对已存在 PyPI project 直接添加/幂等确认 GitHub active Trusted Publisher，并做读回校验
+- `publisher pending-list` / `pending-add` / `pending-remove`：仅用于真正 pending 的注册/占位前例外流程或清理 stale pending；不是普通 Publisher 默认路径
 - `docs`：输出文档链接与示例命令
 
-注册、邮箱验证、2FA 初始化、token 创建/删除和 publisher 写操作仍按人工 checkpoint / browser-assist 边界处理，不把它们伪装成无条件全自动能力。
+注册、邮箱验证、2FA 初始化、token 创建/删除等需要人工验证、二维码、2FA 或复杂 checkpoint 的流程仍按 checkpoint / browser-assist 边界处理。已存在 PyPI project 的 Publisher 写操作不应 pending：应直接用 `publisher add-github` 完成并读回确认。
 
 旧命令仍兼容：
 
