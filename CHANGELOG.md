@@ -28,7 +28,7 @@
 - Expose importable Python APIs for scaffold/build/check/probe/upload helpers.
 - Provide `chatpypi` CLI as a thin adapter over the package API.
 
-## YYYY-MM-DD
+## 0.2.0 - 2026-06-26
 
 ### Added
 
@@ -39,5 +39,8 @@
 ### Changed
 
 - Update README and docs index pages to reflect the merged CLI tree and manual token upload path.
+- Document the full reserved CLI tree plus the current env configuration for session-backed reads and manual token uploads.
 
 ### Fixed
+
+- Add CLI coverage for `PYPI_SESSION_FILE` reads and clearer failure behavior when a required secret env var is unset.

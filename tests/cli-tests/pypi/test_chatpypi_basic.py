@@ -100,6 +100,31 @@ if __name__ == "__main__":
     )
 
 
+def _write_session_file(path: Path) -> None:
+    path.write_text(
+        """
+{
+  "provider": "pypi",
+  "username": "LooKeng",
+  "created_at": "2026-06-26T10:00:00Z",
+  "updated_at": "2026-06-26T11:00:00Z",
+  "cookies": [
+    {"name": "session_id", "value": "masked"}
+  ],
+  "csrf": {
+    "last_seen_token": "masked"
+  },
+  "meta": {
+    "email_verified": true,
+    "two_factor_enabled": true
+  }
+}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_chatpypi_basic(tmp_path):
     runner = CliRunner()
     project_dir = tmp_path / "mychat"
@@ -191,6 +216,57 @@ def test_chatpypi_pkg_upload_uses_token_env(tmp_path):
     assert "--repository testpypi" in upload.output
     assert "--username __token__" in upload.output
     assert "password=demo-token-value" in upload.output
+
+
+def test_chatpypi_auth_session_show_uses_env_session_file(tmp_path):
+    runner = CliRunner()
+    session_file = tmp_path / "pypi-session.json"
+    _write_session_file(session_file)
+
+    result = runner.invoke(
+        cli,
+        ["auth", "session", "show", "--format", "json"],
+        env={"PYPI_SESSION_FILE": str(session_file)},
+    )
+
+    assert result.exit_code == 0
+    assert '"path": "' in result.output
+    assert '"username": "LooKeng"' in result.output
+    assert '"cookie_count": 1' in result.output
+    assert '"has_last_seen_csrf": true' in result.output
+
+
+def test_chatpypi_pkg_upload_reports_unset_secret_env(tmp_path):
+    runner = CliRunner()
+    project_dir = tmp_path / "demo-pkg"
+    fake_site = tmp_path / "fake-site"
+
+    _write_minimal_project(project_dir)
+    _write_fake_build_module(fake_site)
+    _write_fake_twine_module(fake_site)
+
+    build = runner.invoke(
+        cli,
+        ["pkg", "build", "--project-dir", str(project_dir)],
+        env={"PYTHONPATH": _pythonpath_with_fake_site(fake_site)},
+    )
+    assert build.exit_code == 0
+
+    upload = runner.invoke(
+        cli,
+        [
+            "pkg",
+            "upload",
+            "--project-dir",
+            str(project_dir),
+            "--token-env",
+            "PYPI_API_TOKEN",
+        ],
+        env={"PYTHONPATH": _pythonpath_with_fake_site(fake_site)},
+    )
+
+    assert upload.exit_code != 0
+    assert "references unset environment variable: PYPI_API_TOKEN" in upload.output
 
 
 def test_chatpypi_init_chatarch_template(tmp_path):

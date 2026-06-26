@@ -7,7 +7,7 @@ from chatpypi import __version__
 
 
 def test_version_present():
-    assert __version__ == "0.1.4"
+    assert __version__ == "0.2.0"
 
 
 def test_public_package_api_exports_core_helpers(tmp_path):

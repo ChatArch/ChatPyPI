@@ -1,11 +1,11 @@
 # test_chatpypi_basic
 
-测试 `chatpypi` 的基础 CLI 链路，覆盖 legacy root aliases、`pkg` 命名空间与手动 token 上传入口。
+测试 `chatpypi` 的基础 CLI 链路，覆盖 legacy root aliases、`pkg` 命名空间、session 文件读取与手动 token 上传入口。
 
 ## 元信息
 
 - 命令：`chatpypi <command> [args]`
-- 目的：验证 PyPI 工具板块已接入主 CLI，并具备最小可用的建包、产物校验与 token 上传入口能力。
+- 目的：验证 PyPI 工具板块已接入主 CLI，并具备最小可用的建包、产物校验、session 读取与 token 上传入口能力。
 - 标签：`cli`、`e2e`
 - 前置条件：本地可执行 Python，临时目录可写。
 - 环境准备：创建一个最小 Python 包目录，包含 `pyproject.toml`、`README.md`、`LICENSE`。
@@ -103,6 +103,35 @@ python -m pytest -q
 export PYPI_API_TOKEN=...
 chatpypi pkg upload --project-dir /tmp/mychat --token-env PYPI_API_TOKEN
 ```
+
+## 用例 5：`auth session show` 支持从 `PYPI_SESSION_FILE` 读取 session 文件
+
+- 初始环境准备：
+  - 本地存在一个 JSON session 文件，包含 `provider`、`username`、`cookies`、`csrf`、`meta` 等字段。
+  - 环境变量 `PYPI_SESSION_FILE` 指向该文件。
+
+预期过程和结果：
+  1. 执行 `chatpypi auth session show --format json`。
+  2. 预期 CLI 自动读取 `PYPI_SESSION_FILE`。
+  3. 预期输出非敏感摘要，如 `username`、`cookie_count`、`has_last_seen_csrf`，而不是直接回显 cookie 内容。
+
+参考执行脚本（伪代码）：
+
+```sh
+export PYPI_SESSION_FILE=/tmp/pypi-session.json
+chatpypi auth session show --format json
+```
+
+## 用例 6：缺失 secret 环境变量时给出明确错误
+
+- 初始环境准备：
+  - 已完成最小项目构建。
+  - 没有设置 `PYPI_API_TOKEN`。
+
+预期过程和结果：
+  1. 执行 `chatpypi pkg upload --project-dir <tmp>/mychat --token-env PYPI_API_TOKEN`。
+  2. 预期 CLI 直接失败，不进入 `twine upload`。
+  3. 预期错误消息明确指出 `PYPI_API_TOKEN` 未设置，便于用户修正 env 配置。
 
 ## 清理 / 回滚
 
