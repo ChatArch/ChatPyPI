@@ -354,9 +354,8 @@ def _echo_json(payload: dict[str, object]) -> None:
 @click.option(
     "--with-chatenv-provider/--without-chatenv-provider",
     "include_chatenv_provider",
-    default=False,
-    show_default=True,
-    help="Create ChatEnv provider config.py and chatenv.configs entry point for chatarch template.",
+    default=None,
+    help="Create ChatEnv provider config.py and chatenv.configs entry point for chatarch template. Defaults to on for chatarch.",
 )
 @click.option(
     "--chatenv-provider-name",
@@ -382,7 +381,7 @@ def init(
     project_dir: Path | None,
     include_mkdocs: bool | None,
     include_workflows: bool | None,
-    include_chatenv_provider: bool,
+    include_chatenv_provider: bool | None,
     chatenv_provider_name: str | None,
     interactive: bool | None,
 ):
@@ -496,6 +495,8 @@ def init(
         project_dir=project_dir,
         template=template,
     )
+    if include_chatenv_provider is None:
+        include_chatenv_provider = template == "chatarch"
     if chatenv_provider_name and not include_chatenv_provider:
         raise click.ClickException(
             "--chatenv-provider-name requires --with-chatenv-provider."

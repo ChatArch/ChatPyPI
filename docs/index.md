@@ -58,6 +58,14 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## Env 配置说明
 
+ChatPyPI 安装后会通过 `chatenv.configs` 注册 `pypi` / `chatpypi` 配置类型，因此 ChatEnv 可以识别它：
+
+```bash
+chatenv list
+chatenv test -t pypi
+chatenv new -t pypi default
+```
+
 当前文档建议区分“会话读取”和“手动发布”两类变量。
 
 最小变量：
@@ -70,6 +78,8 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 - `PYPI_USERNAME`
 - `PYPI_PASSWORD`
 - `PYPI_TOTP_SECRET`
+
+模板约定：`chatpypi init -t chatarch` 默认生成 `config.py` 和 `chatenv.configs` entry point，使新包能被 ChatEnv 发现；只有显式传 `--without-chatenv-provider` 才跳过。
 
 约定：
 

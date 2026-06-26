@@ -114,7 +114,15 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## Env Configuration
 
-PyPI-related values should live in shell env, `.env`, or a local profile file.
+ChatPyPI registers a `pypi` / `chatpypi` config type through `chatenv.configs`, so ChatEnv can discover and manage it after installation:
+
+```bash
+chatenv list
+chatenv test -t pypi
+chatenv new -t pypi default
+```
+
+PyPI-related values should live in a ChatEnv profile, shell env, `.env`, or a local profile file.
 The minimum set currently falls into two categories:
 
 - Session-backed read flows:
@@ -156,6 +164,7 @@ This template depends on `chatstyle>=0.1.0,<0.2.0` and `chatenv>=0.2.0,<0.3.0`. 
 - `CommandSchema` / `CommandField` for inputs.
 - `add_interactive_option()` for the shared `-i/-I` switch.
 - `resolve_command_inputs()` for missing args, defaults, TTY behavior, and validation.
+- `chatpypi init -t chatarch` generates `config.py` and a `chatenv.configs` entry point by default; pass `--without-chatenv-provider` only when the package should not be ChatEnv-discoverable.
 
 ## Layout
 

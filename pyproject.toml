@@ -25,6 +25,9 @@ Documentation = "https://ChatArch.github.io/ChatPyPI"
 [project.scripts]
 chatpypi = "chatpypi.cli:main"
 
+[project.entry-points."chatenv.configs"]
+pypi = "chatpypi.config"
+
 [project.optional-dependencies]
 dev = ["build", "pytest", "twine"]
 docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mike>=2.0.0"]

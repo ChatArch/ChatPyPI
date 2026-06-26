@@ -4,10 +4,11 @@ import logging
 import chatpypi
 from chatpypi import CommandResult
 from chatpypi import __version__
+from chatpypi.config import PyPIConfig
 
 
 def test_version_present():
-    assert __version__ == "0.2.0"
+    assert __version__ == "0.2.1"
 
 
 def test_public_package_api_exports_core_helpers(tmp_path):
@@ -49,6 +50,34 @@ def test_runtime_dependencies_include_build_and_twine():
 
     assert '"build>=1.2.0,<2.0.0"' in text
     assert '"twine>=6.0.0,<7.0.0"' in text
+
+
+def test_chatenv_provider_entry_point_declared():
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+
+    assert '[project.entry-points."chatenv.configs"]' in text
+    assert 'pypi = "chatpypi.config"' in text
+
+
+def test_chatenv_pypi_config_schema():
+    assert PyPIConfig._title == "PyPI Configuration"
+    assert PyPIConfig._aliases == ["pypi", "chatpypi"]
+    assert PyPIConfig._storage_dir == "PyPI"
+    fields = PyPIConfig.get_fields()
+
+    assert "PYPI_SESSION_FILE" in fields
+    assert fields["PYPI_API_TOKEN"].is_sensitive is True
+    assert fields["PYPI_PASSWORD"].is_sensitive is True
+    assert fields["PYPI_TOTP_SECRET"].is_sensitive is True
+
+
+def test_chatenv_pypi_config_test_is_side_effect_free(capsys):
+    PyPIConfig.test()
+
+    output = capsys.readouterr().out
+    assert "Testing PyPI Configuration" in output
+    assert "Schema loaded" in output
 
 
 def test_build_package_logs_and_returns_artifacts(tmp_path, caplog):

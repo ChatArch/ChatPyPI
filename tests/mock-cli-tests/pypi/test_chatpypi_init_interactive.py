@@ -110,7 +110,9 @@ def test_chatpypi_init_chatarch_template_interactive(
     )
     assert '"chatstyle>=0.1.0,<0.2.0"' in pyproject_text
     assert '"chatenv>=0.2.0,<0.3.0"' in pyproject_text
-    assert '[project.entry-points."chatenv.configs"]' not in pyproject_text
+    assert '[project.entry-points."chatenv.configs"]' in pyproject_text
+    assert 'demo_pkg = "demo_pkg.config"' in pyproject_text
+    assert (tmp_path / "demo-pkg" / "src" / "demo_pkg" / "config.py").exists()
 
 
 def test_chatpypi_init_chatarch_can_generate_chatenv_provider(
@@ -147,7 +149,32 @@ def test_chatpypi_init_chatarch_can_generate_chatenv_provider(
     assert '_storage_dir = "Github"' in config_text
 
 
-def test_chatpypi_init_rejects_chatenv_provider_name_without_provider(
+def test_chatpypi_init_chatarch_provider_name_uses_default_provider(
+    tmp_path, runner
+):
+    project_dir = tmp_path / "demo-pkg"
+
+    result = runner.invoke(
+        cli,
+        [
+            "init",
+            "demo-pkg",
+            "-t",
+            "chatarch",
+            "--project-dir",
+            str(project_dir),
+            "--chatenv-provider-name",
+            "demo",
+            "-I",
+        ],
+    )
+
+    assert result.exit_code == 0
+    pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'demo = "demo_pkg.config"' in pyproject_text
+
+
+def test_chatpypi_init_rejects_chatenv_provider_name_when_disabled(
     tmp_path, runner
 ):
     result = runner.invoke(
@@ -159,6 +186,7 @@ def test_chatpypi_init_rejects_chatenv_provider_name_without_provider(
             "chatarch",
             "--project-dir",
             str(tmp_path / "demo-pkg"),
+            "--without-chatenv-provider",
             "--chatenv-provider-name",
             "demo",
             "-I",
@@ -186,6 +214,31 @@ def test_chatpypi_init_rejects_chatenv_provider_for_default_template(
 
     assert result.exit_code != 0
     assert "--with-chatenv-provider is only supported by the chatarch template" in result.output
+
+
+def test_chatpypi_init_chatarch_can_opt_out_of_chatenv_provider(
+    tmp_path, runner
+):
+    project_dir = tmp_path / "demo-pkg"
+
+    result = runner.invoke(
+        cli,
+        [
+            "init",
+            "demo-pkg",
+            "-t",
+            "chatarch",
+            "--project-dir",
+            str(project_dir),
+            "--without-chatenv-provider",
+            "-I",
+        ],
+    )
+
+    assert result.exit_code == 0
+    pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
+    assert '[project.entry-points."chatenv.configs"]' not in pyproject_text
+    assert not (project_dir / "src" / "demo_pkg" / "config.py").exists()
 
 
 def test_chatpypi_init_stops_early_when_project_dir_not_empty(

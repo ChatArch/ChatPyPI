@@ -463,6 +463,13 @@ def _build_chatarch_chatenv_config_py(
                 _aliases = [{aliases_text}]
                 _storage_dir = {_py_string_literal(storage_dir)}
 
+                @classmethod
+                def test(cls) -> None:
+                    """Validate schema registration without external side effects."""
+
+                    print(f"Testing {{cls._title}}...")
+                    print("Schema loaded; no network test is required.")
+
                 {env_key_prefix}_API_KEY = EnvField(
                     {_py_string_literal(env_key)},
                     desc="API key",
@@ -582,6 +589,7 @@ python -m build
 - `CommandSchema` / `CommandField` 描述输入。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
+- 默认生成 `config.py` 和 `chatenv.configs` entry point，使包可被 ChatEnv 发现；只有明确不需要 ChatEnv 接入时才使用 `--without-chatenv-provider`。
 
 ## 目录结构
 
@@ -635,6 +643,7 @@ This template depends on `chatstyle>=0.1.0,<0.2.0` and `chatenv>=0.2.0,<0.3.0`. 
 - `CommandSchema` / `CommandField` for inputs.
 - `add_interactive_option()` for the shared `-i/-I` switch.
 - `resolve_command_inputs()` for missing args, defaults, TTY behavior, and validation.
+- Generate `config.py` and a `chatenv.configs` entry point by default so the package is ChatEnv-discoverable; use `--without-chatenv-provider` only when ChatEnv integration is intentionally not needed.
 
 ## Layout
 
@@ -861,7 +870,7 @@ def scaffold_package(
     template: str = "default",
     include_mkdocs: bool | None = None,
     include_workflows: bool | None = None,
-    include_chatenv_provider: bool = False,
+    include_chatenv_provider: bool | None = None,
     chatenv_provider_name: str | None = None,
 ) -> ScaffoldResult:
     package_name = package_name.strip()
@@ -873,6 +882,8 @@ def scaffold_package(
         include_mkdocs = template == "chatarch"
     if include_workflows is None:
         include_workflows = template == "chatarch"
+    if include_chatenv_provider is None:
+        include_chatenv_provider = template == "chatarch"
     if chatenv_provider_name and not include_chatenv_provider:
         raise PyPICommandError(
             "chatenv_provider_name requires include_chatenv_provider=True."

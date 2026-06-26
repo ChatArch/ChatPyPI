@@ -27,4 +27,4 @@ def test_version_option_reports_package_version():
     result = CliRunner().invoke(cli, ["--version"])
 
     assert result.exit_code == 0
-    assert "chatpypi, version 0.2.0" in result.output
+    assert "chatpypi, version 0.2.1" in result.output
