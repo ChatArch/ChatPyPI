@@ -577,7 +577,8 @@ def _build_chatarch_readme(
 
 ```bash
 pip install -e ".[dev]"
-{module_name} hello ChatArch
+{module_name} --help
+{module_name} --version
 python -m pytest -q
 python -m build
 ```
@@ -631,7 +632,8 @@ def _build_chatarch_readme_en(
 
 ```bash
 pip install -e ".[dev]"
-{module_name} hello ChatArch
+{module_name} --help
+{module_name} --version
 python -m pytest -q
 python -m build
 ```
@@ -702,40 +704,14 @@ def _build_chatarch_cli_py(module_name: str) -> str:
             import click
 
             from {module_name} import __version__
-            from chatstyle import (
-                CommandField,
-                CommandSchema,
-                add_interactive_option,
-                render_success,
-                resolve_command_inputs,
-            )
-
-
-            HELLO_SCHEMA = CommandSchema(
-                name="hello",
-                fields=(CommandField("name", prompt="name", required=True),),
-            )
 
 
             @click.group()
             @click.version_option(__version__, prog_name="{module_name}")
             def main() -> None:
                 \"\"\"{module_name} command line interface.\"\"\"
-
-
-            @main.command()
-            @click.argument("name", required=False)
-            @add_interactive_option
-            def hello(name: str | None, interactive: bool | None) -> None:
-                \"\"\"Print a greeting with ChatStyle-backed input resolution.\"\"\"
-
-                values = resolve_command_inputs(
-                    schema=HELLO_SCHEMA,
-                    provided={{"name": name}},
-                    interactive=interactive,
-                    usage="Usage: {module_name} hello [NAME]",
-                )
-                render_success(f"Hello, {{values['name']}}!")
+                # Add package-specific commands here. Prefer ChatStyle helpers for
+                # interactive input when a command needs recoverable user input.
 
 
             if __name__ == "__main__":
@@ -761,13 +737,6 @@ def _build_chatarch_test_cli_py(module_name: str) -> str:
 
                 assert result.exit_code == 0
                 assert f"{module_name}, version {{__version__}}" in result.output
-
-
-            def test_hello_command_accepts_explicit_name():
-                result = CliRunner().invoke(main, ["hello", "ChatArch"])
-
-                assert result.exit_code == 0
-                assert "Hello, ChatArch!" in result.output
             """
         ).strip()
         + "\n"

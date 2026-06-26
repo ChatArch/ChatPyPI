@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Start generated `chatarch` scaffold packages with a minimal CLI skeleton, version/help smoke paths, and package-owned command extension points.
 - Add env-backed `PYPI_SESSION_TOKEN` as the default web-session storage path; `chatpypi auth login` refreshes it in the active or `-e/--env-profile` selected ChatEnv PyPI profile instead of maintaining a separate session file.
 - Make `chatpypi auth login` perform a real PyPI login and handle TOTP when `PYPI_TOTP_SECRET` is available.
 - Make `chatpypi auth whoami` validate the saved session against the PyPI account page instead of only reading local JSON.
