@@ -111,7 +111,15 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## Env 配置
 
-当前建议把 PyPI 相关变量显式放到 shell env、`.env` 或 profile 配置里。最小集合分两类：
+ChatPyPI 会通过 `chatenv.configs` 注册 `pypi` / `chatpypi` 配置类型，因此安装后可被 ChatEnv 发现和管理：
+
+```bash
+chatenv list
+chatenv test -t pypi
+chatenv new -t pypi default
+```
+
+当前建议把 PyPI 相关变量显式放到 ChatEnv profile、shell env、`.env` 或 profile 配置里。最小集合分两类：
 
 - 登录后读取 / session 复用：
   - `PYPI_SESSION_FILE`：本地 session JSON 文件路径
@@ -148,6 +156,7 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 - `CommandSchema` / `CommandField` 描述输入。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
+- `chatpypi init -t chatarch` 默认生成 `config.py` 和 `chatenv.configs` entry point；只有明确传 `--without-chatenv-provider` 时才跳过。
 
 ## 目录结构
 

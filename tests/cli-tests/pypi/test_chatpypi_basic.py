@@ -328,6 +328,8 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert '"chatstyle>=0.1.0,<0.2.0"' in pyproject_text
     assert '"chatenv>=0.2.0,<0.3.0"' in pyproject_text
     assert 'requires-python = ">=3.10"' in pyproject_text
+    assert '[project.entry-points."chatenv.configs"]' in pyproject_text
+    assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
     assert 'docs = ["mkdocs' in pyproject_text
     assert 'Homepage = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
     assert 'Repository = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
@@ -360,6 +362,7 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     cli_text = (project_dir / "src" / "mychat_cli" / "cli.py").read_text(
         encoding="utf-8"
     )
+    assert (project_dir / "src" / "mychat_cli" / "config.py").exists()
     assert "from mychat_cli import __version__" in cli_text
     assert '@click.version_option(__version__, prog_name="mychat_cli")' in cli_text
     assert "from chatstyle import" in cli_text
@@ -379,6 +382,14 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "OWNER/REPO" not in readme_text
     assert "docs-mkdocs" in readme_text
     assert "CommandSchema" in readme_text
+    config_text = (project_dir / "src" / "mychat_cli" / "config.py").read_text(
+        encoding="utf-8"
+    )
+    assert "class MychatCliConfig(BaseEnvConfig):" in config_text
+    assert '_aliases = ["mychat_cli"]' in config_text
+    assert '_storage_dir = "MychatCli"' in config_text
+    assert "def test(cls) -> None:" in config_text
+    assert "Schema loaded; no network test is required." in config_text
 
 
 def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
@@ -407,6 +418,8 @@ def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
     assert '"chatstyle>=0.1.0,<0.2.0"' in pyproject_text
     assert '"chatenv>=0.2.0,<0.3.0"' in pyproject_text
+    assert '[project.entry-points."chatenv.configs"]' in pyproject_text
+    assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
     assert 'docs = ["mkdocs' not in pyproject_text
     assert 'Homepage = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
     assert 'Documentation = "https://ChatArch.github.io/mychat-cli"' not in pyproject_text

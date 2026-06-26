@@ -60,6 +60,14 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## Env Configuration
 
+After installation ChatPyPI registers a `pypi` / `chatpypi` config type through `chatenv.configs`, so ChatEnv can discover it:
+
+```bash
+chatenv list
+chatenv test -t pypi
+chatenv new -t pypi default
+```
+
 The current docs recommend splitting env setup into two categories: session
 reads and manual uploads.
 
@@ -73,6 +81,8 @@ Common optional variables:
 - `PYPI_USERNAME`
 - `PYPI_PASSWORD`
 - `PYPI_TOTP_SECRET`
+
+Template convention: `chatpypi init -t chatarch` generates `config.py` and a `chatenv.configs` entry point by default, so new packages are ChatEnv-discoverable. Pass `--without-chatenv-provider` only to opt out.
 
 Conventions:
 

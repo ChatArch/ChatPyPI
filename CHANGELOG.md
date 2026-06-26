@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 - 2026-06-26
+
+### Fixed
+
+- Register ChatPyPI as a `chatenv.configs` provider so `chatenv` can discover the PyPI/ChatPyPI config schema.
+- Add a `chatpypi.config.PyPIConfig` schema for `PYPI_USERNAME`, `PYPI_EMAIL`, `PYPI_NAME`, `PYPI_PASSWORD`, `PYPI_API_TOKEN`, `PYPI_TOTP_SECRET`, and `PYPI_SESSION_FILE`.
+- Make the `chatarch` scaffold template generate its own ChatEnv provider by default, while keeping `--without-chatenv-provider` available for opt-out.
+
 ## 0.2.0 - 2026-06-26
 
 ### Added
