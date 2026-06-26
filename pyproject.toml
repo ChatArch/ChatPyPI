@@ -9,7 +9,7 @@ description = "ChatPyPI: ChatArch Python package lifecycle helper extracted from
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-dependencies = ["click>=8.0", "build>=1.2.0,<2.0.0", "twine>=6.0.0,<7.0.0", "chatstyle>=0.1.0,<0.2.0", "chatenv>=0.2.0,<0.3.0"]
+dependencies = ["click>=8.0", "requests>=2.31.0,<3.0.0", "build>=1.2.0,<2.0.0", "twine>=6.0.0,<7.0.0", "chatstyle>=0.1.0,<0.2.0", "chatenv>=0.2.0,<0.3.0"]
 authors = [{name = "ChatArch", email = "1073853456@qq.com"}]
 keywords = ["chatpypi", "chatarch", "cli"]
 classifiers = [

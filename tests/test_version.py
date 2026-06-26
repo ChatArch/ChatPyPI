@@ -4,11 +4,15 @@ import logging
 import chatpypi
 from chatpypi import CommandResult
 from chatpypi import __version__
-from chatpypi.config import PyPIConfig
+from chatpypi.config import (
+    PyPIConfig,
+    save_active_pypi_env_value,
+    save_pypi_env_profile_value,
+)
 
 
 def test_version_present():
-    assert __version__ == "0.2.1"
+    assert __version__ == "0.2.2"
 
 
 def test_public_package_api_exports_core_helpers(tmp_path):
@@ -50,6 +54,7 @@ def test_runtime_dependencies_include_build_and_twine():
 
     assert '"build>=1.2.0,<2.0.0"' in text
     assert '"twine>=6.0.0,<7.0.0"' in text
+    assert '"requests>=2.31.0,<3.0.0"' in text
 
 
 def test_chatenv_provider_entry_point_declared():
@@ -66,10 +71,30 @@ def test_chatenv_pypi_config_schema():
     assert PyPIConfig._storage_dir == "PyPI"
     fields = PyPIConfig.get_fields()
 
-    assert "PYPI_SESSION_FILE" in fields
+    assert "PYPI_SESSION_TOKEN" in fields
+    assert fields["PYPI_SESSION_TOKEN"].is_sensitive is True
+    assert "PYPI_SESSION_FILE" not in fields
     assert fields["PYPI_API_TOKEN"].is_sensitive is True
     assert fields["PYPI_PASSWORD"].is_sensitive is True
     assert fields["PYPI_TOTP_SECRET"].is_sensitive is True
+
+
+def test_session_token_save_does_not_backfill_process_secrets(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHATARCH_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PYPI_PASSWORD", "process-password-must-not-persist")
+    monkeypatch.setenv("PYPI_API_TOKEN", "process-token-must-not-persist")
+    monkeypatch.setenv("PYPI_TOTP_SECRET", "process-totp-must-not-persist")
+
+    active_path = save_active_pypi_env_value("PYPI_SESSION_TOKEN", "encoded-session")
+    profile_path = save_pypi_env_profile_value("RexWzh", "PYPI_SESSION_TOKEN", "encoded-profile-session")
+
+    active_text = active_path.read_text(encoding="utf-8")
+    profile_text = profile_path.read_text(encoding="utf-8")
+    assert "PYPI_SESSION_TOKEN" in active_text
+    assert "PYPI_SESSION_TOKEN" in profile_text
+    assert "process-password-must-not-persist" not in active_text + profile_text
+    assert "process-token-must-not-persist" not in active_text + profile_text
+    assert "process-totp-must-not-persist" not in active_text + profile_text
 
 
 def test_chatenv_pypi_config_test_is_side_effect_free(capsys):

@@ -1,6 +1,6 @@
 # test_chatpypi_basic
 
-测试 `chatpypi` 的基础 CLI 链路，覆盖版本输出、legacy root aliases、`pkg` 命名空间、session 文件读取与手动 token 上传入口。
+测试 `chatpypi` 的基础 CLI 链路，覆盖版本输出、legacy root aliases、`pkg` 命名空间、env-backed session token 读取与手动 token 上传入口。
 
 ## 元信息
 
@@ -120,21 +120,20 @@ export PYPI_API_TOKEN=...
 chatpypi pkg upload --project-dir /tmp/mychat --token-env PYPI_API_TOKEN
 ```
 
-## 用例 5：`auth session show` 支持从 `PYPI_SESSION_FILE` 读取 session 文件
+## 用例 5：`auth session show` 支持从 `PYPI_SESSION_TOKEN` / ChatEnv 读取 session token
 
 - 初始环境准备：
-  - 本地存在一个 JSON session 文件，包含 `provider`、`username`、`cookies`、`csrf`、`meta` 等字段。
-  - 环境变量 `PYPI_SESSION_FILE` 指向该文件。
+  - 已有一个由 `chatpypi auth login` 生成的 `PYPI_SESSION_TOKEN`，该值可来自当前进程环境或 active ChatEnv PyPI profile。
 
 预期过程和结果：
   1. 执行 `chatpypi auth session show --format json`。
-  2. 预期 CLI 自动读取 `PYPI_SESSION_FILE`。
+  2. 预期 CLI 自动读取 `PYPI_SESSION_TOKEN` / active ChatEnv，不需要外部 session 文件。
   3. 预期输出非敏感摘要，如 `username`、`cookie_count`、`has_last_seen_csrf`，而不是直接回显 cookie 内容。
 
 参考执行脚本（伪代码）：
 
 ```sh
-export PYPI_SESSION_FILE=/tmp/pypi-session.json
+chatpypi auth login --password-env PYPI_PASSWORD --totp-env PYPI_TOTP_SECRET
 chatpypi auth session show --format json
 ```
 
@@ -149,15 +148,15 @@ chatpypi auth session show --format json
   2. 预期 CLI 直接失败，不进入 `twine upload`。
   3. 预期错误消息明确指出 `PYPI_API_TOKEN` 未设置，便于用户修正 env 配置。
 
-## 用例 7：session 文件必须是 JSON object
+## 用例 7：无效 session token 必须给出明确错误
 
 - 初始环境准备：
-  - 本地存在一个合法 JSON 但非 object 的 session 文件，例如 `[]`。
+  - `PYPI_SESSION_TOKEN` 存在但不是 ChatPyPI 可解析的 session token。
 
 预期过程和结果：
-  1. 执行 `chatpypi auth session show --session-file <file>`。
+  1. 执行 `chatpypi auth session show`。
   2. 预期 CLI 非 0 退出。
-  3. 预期错误消息明确指出 session 文件必须是 JSON object，不能抛出 traceback。
+  3. 预期错误消息明确指出 `PYPI_SESSION_TOKEN` 无效，不能抛出 traceback。
 
 ## 用例 8：预留操作命令不能成功退出
 

@@ -1,11 +1,21 @@
 # Changelog
 
+## 0.2.2 - 2026-06-26
+
+### Fixed
+
+- Add env-backed `PYPI_SESSION_TOKEN` as the default web-session storage path; `chatpypi auth login` refreshes it in the active or `-e/--env-profile` selected ChatEnv PyPI profile instead of maintaining a separate session file.
+- Make `chatpypi auth login` perform a real PyPI login and handle TOTP when `PYPI_TOTP_SECRET` is available.
+- Make `chatpypi auth whoami` validate the saved session against the PyPI account page instead of only reading local JSON.
+- Make `chatpypi project list`, `chatpypi publisher list`, `chatpypi publisher pending-list`, and `chatpypi doctor check` use the saved logged-in session instead of reserved placeholder commands.
+- Keep registration and high-sensitivity token/publisher write actions as checkpoint-aware assist flows rather than pretending they are fully automated.
+
 ## 0.2.1 - 2026-06-26
 
 ### Fixed
 
 - Register ChatPyPI as a `chatenv.configs` provider so `chatenv` can discover the PyPI/ChatPyPI config schema.
-- Add a `chatpypi.config.PyPIConfig` schema for `PYPI_USERNAME`, `PYPI_EMAIL`, `PYPI_NAME`, `PYPI_PASSWORD`, `PYPI_API_TOKEN`, `PYPI_TOTP_SECRET`, and `PYPI_SESSION_FILE`.
+- Add a `chatpypi.config.PyPIConfig` schema for `PYPI_USERNAME`, `PYPI_EMAIL`, `PYPI_NAME`, `PYPI_PASSWORD`, `PYPI_API_TOKEN`, `PYPI_TOTP_SECRET`, and session-related env keys.
 - Make the `chatarch` scaffold template generate its own ChatEnv provider by default, while keeping `--without-chatenv-provider` available for opt-out.
 
 ## 0.2.0 - 2026-06-26
@@ -26,10 +36,10 @@
 ### Fixed
 
 - Add a top-level `chatpypi --version` release-gate smoke path.
-- Validate that session files contain JSON objects instead of crashing on other JSON shapes.
+- Validate local session JSON shapes instead of crashing on malformed data.
 - Redact token/password environment values from upload subprocess output before echoing it.
 - Preserve two-argument `upload_distributions(..., runner=...)` compatibility when no env override is provided.
-- Add CLI coverage for `PYPI_SESSION_FILE` reads and clearer failure behavior when a required secret env var is unset.
+- Add CLI coverage for `PYPI_SESSION_TOKEN` reads and clearer failure behavior when a required secret env var is unset.
 
 ## 0.1.4 - 2026-06-25
 
