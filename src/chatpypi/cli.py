@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 
 import click
 
+from chatpypi import __version__
 from chatstyle import INTERACTIVE_OPTION_HELP
 from chatstyle import (
     abort_if_force_without_tty,
@@ -158,9 +161,142 @@ def _resolve_project_and_dist_dirs(
 
 
 @click.group(name="chatpypi")
+@click.version_option(__version__, prog_name="chatpypi")
 def cli():
-    """Python package scaffold/build/check/upload helpers."""
+    """Python package lifecycle and PyPI operations helpers."""
     pass
+
+
+@cli.group(name="pkg")
+def pkg():
+    """Package scaffold/build/check/upload/probe helpers."""
+    pass
+
+
+@cli.group(name="auth")
+def auth():
+    """Authentication, session, and bootstrap helpers."""
+    pass
+
+
+@auth.group(name="session")
+def auth_session():
+    """Inspect and manage local PyPI session files."""
+    pass
+
+
+@cli.group(name="profile")
+def profile():
+    """Manage local ChatPyPI profiles."""
+    pass
+
+
+@cli.group(name="config")
+def config():
+    """Manage local ChatPyPI config."""
+    pass
+
+
+@cli.group(name="project")
+def project():
+    """Read current-account project views."""
+    pass
+
+
+@cli.group(name="publisher")
+def publisher():
+    """Read or manage current-account publisher views."""
+    pass
+
+
+@cli.group(name="token")
+def token():
+    """Read or manage PyPI API tokens."""
+    pass
+
+
+@cli.group(name="doctor")
+def doctor():
+    """Run local configuration and session checks."""
+    pass
+
+
+@cli.group(name="docs")
+def docs():
+    """Show documentation links and usage examples."""
+    pass
+
+
+def _resolve_secret_env_var(
+    *,
+    option_label: str,
+    env_var_name: str | None,
+) -> str | None:
+    if not env_var_name:
+        return None
+    env_var = env_var_name.strip()
+    if not env_var:
+        return None
+    value = os.environ.get(env_var)
+    if value is None:
+        raise click.ClickException(
+            f"{option_label} references unset environment variable: {env_var}"
+        )
+    if not value:
+        raise click.ClickException(
+            f"{option_label} references empty environment variable: {env_var}"
+        )
+    return value
+
+
+def _planned_command_notice(command_path: str, summary: str) -> None:
+    raise click.ClickException(
+        f"{command_path} is reserved for the new ChatPyPI infra but is not implemented yet. "
+        f"{summary}"
+    )
+
+
+def _load_session_payload(session_file: Path) -> dict:
+    try:
+        payload = json.loads(session_file.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise click.ClickException(f"Session file not found: {session_file}") from exc
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(
+            f"Session file is not valid JSON: {session_file}: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise click.ClickException(
+            f"Session file must contain a JSON object: {session_file}"
+        )
+    return payload
+
+
+def _session_summary(payload: dict, session_file: Path) -> dict[str, object]:
+    cookies = payload.get("cookies")
+    csrf = payload.get("csrf")
+    meta = payload.get("meta")
+    return {
+        "path": str(session_file),
+        "provider": payload.get("provider") or "pypi",
+        "username": payload.get("username"),
+        "created_at": payload.get("created_at"),
+        "updated_at": payload.get("updated_at"),
+        "cookie_count": len(cookies) if isinstance(cookies, list) else 0,
+        "has_last_seen_csrf": bool(
+            isinstance(csrf, dict) and csrf.get("last_seen_token")
+        ),
+        "email_verified": (
+            meta.get("email_verified") if isinstance(meta, dict) else None
+        ),
+        "two_factor_enabled": (
+            meta.get("two_factor_enabled") if isinstance(meta, dict) else None
+        ),
+    }
+
+
+def _echo_json(payload: dict[str, object]) -> None:
+    click.echo(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 
 @cli.command(name="init")
@@ -447,9 +583,67 @@ def check(project_dir: Path, dist_dir: Path | None, strict: bool):
 @click.option(
     "--skip-existing", is_flag=True, help="Pass --skip-existing to twine upload."
 )
+@click.option(
+    "--repository-url",
+    default=None,
+    help="Custom repository upload URL. Overrides --repository.",
+)
+@click.option(
+    "--repository",
+    type=click.Choice(["testpypi", "pypi"]),
+    default="pypi",
+    show_default=True,
+    help="Target repository for twine upload.",
+)
+@click.option(
+    "--username",
+    default=None,
+    help="Explicit twine username. Use __token__ for API tokens.",
+)
+@click.option(
+    "--password-env",
+    default=None,
+    help="Environment variable that stores the upload password.",
+)
+@click.option(
+    "--token-env",
+    default=None,
+    help="Environment variable that stores a PyPI API token. Implies username=__token__.",
+)
 @_project_options
-def upload(project_dir: Path, dist_dir: Path | None, skip_existing: bool):
+def upload(
+    project_dir: Path,
+    dist_dir: Path | None,
+    skip_existing: bool,
+    repository_url: str | None,
+    repository: str,
+    username: str | None,
+    password_env: str | None,
+    token_env: str | None,
+):
     """Upload built distributions with the default twine upload behavior."""
+    if password_env and token_env:
+        raise click.ClickException(
+            "--password-env and --token-env are mutually exclusive."
+        )
+    upload_env: dict[str, str] | None = None
+    resolved_username = _normalize_optional_text(username)
+    if token_env:
+        resolved_username = "__token__"
+        token_value = _resolve_secret_env_var(
+            option_label="--token-env",
+            env_var_name=token_env,
+        )
+        upload_env = dict(os.environ)
+        upload_env["TWINE_PASSWORD"] = token_value
+    elif password_env:
+        password_value = _resolve_secret_env_var(
+            option_label="--password-env",
+            env_var_name=password_env,
+        )
+        upload_env = dict(os.environ)
+        upload_env["TWINE_PASSWORD"] = password_value
+
     project_dir, dist_dir = _resolve_project_and_dist_dirs(project_dir, dist_dir)
     click.echo(f"Uploading distributions from {dist_dir} with `twine upload`...")
     try:
@@ -457,6 +651,10 @@ def upload(project_dir: Path, dist_dir: Path | None, skip_existing: bool):
             project_dir,
             dist_dir,
             skip_existing=skip_existing,
+            repository=repository,
+            repository_url=repository_url,
+            username=resolved_username,
+            env=upload_env,
         )
     except PyPICommandError as exc:
         _raise_click_error(exc)
@@ -523,7 +721,287 @@ def probe(
         raise click.ClickException("Repository conflict checks found blocking issues.")
 
 
-KNOWN_COMMANDS = {"init", "build", "check", "upload", "probe", "--help", "-h"}
+@auth.command(name="login")
+def auth_login():
+    """Plan the future login workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth login",
+        "Planned to exchange username/password/TOTP for a reusable local session file.",
+    )
+
+
+@auth.command(name="logout")
+def auth_logout():
+    """Plan the future logout workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth logout",
+        "Planned to clear or invalidate the current local PyPI session.",
+    )
+
+
+@auth.command(name="whoami")
+@click.option(
+    "--session-file",
+    type=click.Path(path_type=Path, dir_okay=False),
+    envvar="PYPI_SESSION_FILE",
+    default=None,
+    help="Session file to inspect. Defaults to $PYPI_SESSION_FILE.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def auth_whoami(session_file: Path | None, output_format: str):
+    """Inspect the current local session summary."""
+    if session_file is None:
+        raise click.ClickException(
+            "Session file is required. Pass --session-file or set PYPI_SESSION_FILE."
+        )
+    payload = _load_session_payload(session_file)
+    summary = _session_summary(payload, session_file)
+    if output_format == "json":
+        _echo_json(summary)
+        return
+    click.echo(f"profile session: {summary['path']}")
+    click.echo(f"provider={summary['provider']}")
+    click.echo(f"username={summary['username'] or 'unknown'}")
+    click.echo(f"updated_at={summary['updated_at'] or 'unknown'}")
+    click.echo(
+        "email_verified="
+        + ("true" if summary["email_verified"] is True else "false" if summary["email_verified"] is False else "unknown")
+    )
+    click.echo(
+        "two_factor_enabled="
+        + ("true" if summary["two_factor_enabled"] is True else "false" if summary["two_factor_enabled"] is False else "unknown")
+    )
+
+
+@auth.command(name="register")
+def auth_register():
+    """Plan the future register workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth register",
+        "Planned as an assist-first workflow. Full machine-only registration is not guaranteed.",
+    )
+
+
+@auth.command(name="verify-email")
+def auth_verify_email():
+    """Plan the future verify-email workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth verify-email",
+        "Planned to consume a one-time verify-email link or token during bootstrap.",
+    )
+
+
+@auth.command(name="setup-2fa")
+def auth_setup_2fa():
+    """Plan the future setup-2fa workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth setup-2fa",
+        "Planned to guide TOTP/WebAuthn setup and persist the private bootstrap artifacts locally.",
+    )
+
+
+@auth.command(name="recovery-codes")
+def auth_recovery_codes():
+    """Plan the future recovery-codes workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth recovery-codes",
+        "Planned to summarize, regenerate, or store recovery codes with explicit user confirmation.",
+    )
+
+
+@auth_session.command(name="show")
+@click.option(
+    "--session-file",
+    type=click.Path(path_type=Path, dir_okay=False),
+    envvar="PYPI_SESSION_FILE",
+    default=None,
+    help="Session file to inspect. Defaults to $PYPI_SESSION_FILE.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def auth_session_show(session_file: Path | None, output_format: str):
+    """Show a non-sensitive summary of the local session file."""
+    if session_file is None:
+        raise click.ClickException(
+            "Session file is required. Pass --session-file or set PYPI_SESSION_FILE."
+        )
+    payload = _load_session_payload(session_file)
+    summary = _session_summary(payload, session_file)
+    if output_format == "json":
+        _echo_json(summary)
+        return
+    click.echo(f"session_file={summary['path']}")
+    click.echo(f"provider={summary['provider']}")
+    click.echo(f"username={summary['username'] or 'unknown'}")
+    click.echo(f"created_at={summary['created_at'] or 'unknown'}")
+    click.echo(f"updated_at={summary['updated_at'] or 'unknown'}")
+    click.echo(f"cookie_count={summary['cookie_count']}")
+    click.echo(
+        "has_last_seen_csrf="
+        + ("true" if summary["has_last_seen_csrf"] else "false")
+    )
+
+
+@auth_session.command(name="export")
+def auth_session_export():
+    """Plan the future session export workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth session export",
+        "Planned to export an in-memory or browser-derived session to the local session file.",
+    )
+
+
+@auth_session.command(name="import")
+def auth_session_import():
+    """Plan the future session import workflow entry point."""
+    _planned_command_notice(
+        "chatpypi auth session import",
+        "Planned to restore a saved local session into the active ChatPyPI runtime.",
+    )
+
+
+@auth_session.command(name="clear")
+@click.option(
+    "--session-file",
+    type=click.Path(path_type=Path, dir_okay=False),
+    envvar="PYPI_SESSION_FILE",
+    default=None,
+    help="Session file to remove. Defaults to $PYPI_SESSION_FILE.",
+)
+def auth_session_clear(session_file: Path | None):
+    """Delete the local session file if it exists."""
+    if session_file is None:
+        raise click.ClickException(
+            "Session file is required. Pass --session-file or set PYPI_SESSION_FILE."
+        )
+    if session_file.exists():
+        session_file.unlink()
+        click.echo(f"Removed session file: {session_file}")
+    else:
+        click.echo(f"Session file already absent: {session_file}")
+
+
+def _planned_group_leaf(group, name: str, summary: str):
+    @group.command(name=name)
+    def _command():
+        _planned_command_notice(f"chatpypi {group.name} {name}", summary)
+
+    return _command
+
+
+_planned_group_leaf(profile, "list", "Planned to list local named ChatPyPI profiles.")
+_planned_group_leaf(profile, "show", "Planned to show the non-sensitive fields of a local profile.")
+_planned_group_leaf(profile, "use", "Planned to switch the active local profile.")
+_planned_group_leaf(profile, "create", "Planned to create a local profile for PyPI work.")
+_planned_group_leaf(profile, "delete", "Planned to delete a local profile with confirmation.")
+_planned_group_leaf(config, "list", "Planned to list persisted ChatPyPI config keys and values.")
+_planned_group_leaf(config, "get", "Planned to read one persisted ChatPyPI config key.")
+_planned_group_leaf(config, "set", "Planned to write one persisted ChatPyPI config key.")
+_planned_group_leaf(config, "unset", "Planned to remove one persisted ChatPyPI config key.")
+_planned_group_leaf(project, "list", "Planned to list the logged-in account's PyPI projects.")
+_planned_group_leaf(project, "show", "Planned to show one logged-in account PyPI project.")
+_planned_group_leaf(publisher, "list", "Planned to list the logged-in account's active publishers.")
+_planned_group_leaf(
+    publisher,
+    "pending-list",
+    "Planned to list pending publishers from the logged-in account publishing page.",
+)
+_planned_group_leaf(
+    publisher,
+    "pending-add",
+    "Planned as a checkpoint-aware browser-assisted publisher creation flow.",
+)
+_planned_group_leaf(
+    publisher,
+    "pending-remove",
+    "Planned as a checkpoint-aware browser-assisted publisher removal flow.",
+)
+_planned_group_leaf(token, "list", "Planned to list token summaries without revealing token values.")
+_planned_group_leaf(
+    token,
+    "create",
+    "Planned to create a PyPI API token and persist the one-time secret in a private store.",
+)
+_planned_group_leaf(token, "revoke", "Planned to revoke a PyPI API token with confirmation.")
+_planned_group_leaf(
+    doctor,
+    "check",
+    "Planned to validate the active profile, session file, and read-only PyPI connectivity.",
+)
+
+
+@docs.command(name="links")
+def docs_links():
+    """Show the most relevant documentation entry points."""
+    click.echo("ChatPyPI docs: https://ChatArch.github.io/ChatPyPI")
+    click.echo("PyPI user docs: https://docs.pypi.org/")
+    click.echo("Trusted publishing guide: https://docs.pypi.org/trusted-publishers/")
+
+
+@docs.command(name="examples")
+def docs_examples():
+    """Show common CLI examples for the current infra direction."""
+    click.echo("chatpypi pkg init chatpypi-demo --project-dir ./chatpypi-demo")
+    click.echo("chatpypi pkg build --project-dir ./chatpypi-demo")
+    click.echo("chatpypi pkg check --project-dir ./chatpypi-demo")
+    click.echo(
+        "chatpypi pkg upload --project-dir ./chatpypi-demo --token-env PYPI_API_TOKEN"
+    )
+    click.echo("chatpypi auth session show")
+
+
+@docs.command(name="open")
+@click.argument("topic", required=False)
+def docs_open(topic: str | None):
+    """Print a documentation URL for a known topic."""
+    routes = {
+        None: "https://ChatArch.github.io/ChatPyPI",
+        "pypi": "https://docs.pypi.org/",
+        "trusted-publishing": "https://docs.pypi.org/trusted-publishers/",
+        "api-tokens": "https://docs.pypi.org/api/tokens/",
+    }
+    target = routes.get(_normalize_optional_text(topic), routes[None])
+    click.echo(target)
+
+
+pkg.add_command(init)
+pkg.add_command(build)
+pkg.add_command(check)
+pkg.add_command(upload)
+pkg.add_command(probe)
+
+
+KNOWN_COMMANDS = {
+    "auth",
+    "profile",
+    "config",
+    "pkg",
+    "project",
+    "publisher",
+    "token",
+    "doctor",
+    "docs",
+    "init",
+    "build",
+    "check",
+    "upload",
+    "probe",
+    "--help",
+    "-h",
+}
 
 
 def main() -> None:

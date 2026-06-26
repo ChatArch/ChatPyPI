@@ -13,6 +13,7 @@ pytestmark = [pytest.mark.e2e]
 
 
 def _write_minimal_project(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
     (root / "pyproject.toml").write_text(
         """
 [build-system]
@@ -74,6 +75,7 @@ def _write_fake_twine_module(fake_site: Path) -> None:
     (twine_pkg / "__init__.py").write_text("", encoding="utf-8")
     (twine_pkg / "__main__.py").write_text(
         """
+import os
 import sys
 
 
@@ -81,11 +83,42 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "check":
         print("fake check ok")
         return 0
+    if len(sys.argv) > 1 and sys.argv[1] == "upload":
+        print("fake upload ok")
+        print("args=" + " ".join(sys.argv[1:]))
+        print("username=" + os.environ.get("TWINE_USERNAME", ""))
+        print("password=" + os.environ.get("TWINE_PASSWORD", ""))
+        return 0
     raise SystemExit(2)
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_session_file(path: Path) -> None:
+    path.write_text(
+        """
+{
+  "provider": "pypi",
+  "username": "LooKeng",
+  "created_at": "2026-06-26T10:00:00Z",
+  "updated_at": "2026-06-26T11:00:00Z",
+  "cookies": [
+    {"name": "session_id", "value": "masked"}
+  ],
+  "csrf": {
+    "last_seen_token": "masked"
+  },
+  "meta": {
+    "email_verified": true,
+    "two_factor_enabled": true
+  }
+}
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -142,6 +175,120 @@ def test_chatpypi_basic(tmp_path):
     assert check.exit_code == 0
     assert "fake check ok" in check.output
     assert "Checked distributions:" in check.output
+
+
+def test_chatpypi_pkg_upload_uses_token_env(tmp_path):
+    runner = CliRunner()
+    project_dir = tmp_path / "demo-pkg"
+    fake_site = tmp_path / "fake-site"
+
+    _write_minimal_project(project_dir)
+    _write_fake_build_module(fake_site)
+    _write_fake_twine_module(fake_site)
+
+    build = runner.invoke(
+        cli,
+        ["pkg", "build", "--project-dir", str(project_dir)],
+        env={"PYTHONPATH": _pythonpath_with_fake_site(fake_site)},
+    )
+    assert build.exit_code == 0
+
+    upload = runner.invoke(
+        cli,
+        [
+            "pkg",
+            "upload",
+            "--project-dir",
+            str(project_dir),
+            "--repository",
+            "testpypi",
+            "--token-env",
+            "PYPI_API_TOKEN",
+        ],
+        env={
+            "PYTHONPATH": _pythonpath_with_fake_site(fake_site),
+            "PYPI_API_TOKEN": "demo-token-value",
+        },
+    )
+
+    assert upload.exit_code == 0
+    assert "fake upload ok" in upload.output
+    assert "--repository testpypi" in upload.output
+    assert "--username __token__" in upload.output
+    assert "password=[REDACTED]" in upload.output
+    assert "demo-token-value" not in upload.output
+
+
+def test_chatpypi_auth_session_show_uses_env_session_file(tmp_path):
+    runner = CliRunner()
+    session_file = tmp_path / "pypi-session.json"
+    _write_session_file(session_file)
+
+    result = runner.invoke(
+        cli,
+        ["auth", "session", "show", "--format", "json"],
+        env={"PYPI_SESSION_FILE": str(session_file)},
+    )
+
+    assert result.exit_code == 0
+    assert '"path": "' in result.output
+    assert '"username": "LooKeng"' in result.output
+    assert '"cookie_count": 1' in result.output
+    assert '"has_last_seen_csrf": true' in result.output
+
+
+def test_chatpypi_auth_session_show_rejects_non_object_json(tmp_path):
+    runner = CliRunner()
+    session_file = tmp_path / "pypi-session.json"
+    session_file.write_text("[]\n", encoding="utf-8")
+
+    result = runner.invoke(
+        cli,
+        ["auth", "session", "show", "--session-file", str(session_file)],
+    )
+
+    assert result.exit_code != 0
+    assert "Session file must contain a JSON object" in result.output
+
+
+def test_planned_operational_commands_fail_nonzero():
+    result = CliRunner().invoke(cli, ["token", "create"])
+
+    assert result.exit_code != 0
+    assert "not implemented yet" in result.output
+
+
+def test_chatpypi_pkg_upload_reports_unset_secret_env(tmp_path):
+    runner = CliRunner()
+    project_dir = tmp_path / "demo-pkg"
+    fake_site = tmp_path / "fake-site"
+
+    _write_minimal_project(project_dir)
+    _write_fake_build_module(fake_site)
+    _write_fake_twine_module(fake_site)
+
+    build = runner.invoke(
+        cli,
+        ["pkg", "build", "--project-dir", str(project_dir)],
+        env={"PYTHONPATH": _pythonpath_with_fake_site(fake_site)},
+    )
+    assert build.exit_code == 0
+
+    upload = runner.invoke(
+        cli,
+        [
+            "pkg",
+            "upload",
+            "--project-dir",
+            str(project_dir),
+            "--token-env",
+            "PYPI_API_TOKEN",
+        ],
+        env={"PYTHONPATH": _pythonpath_with_fake_site(fake_site)},
+    )
+
+    assert upload.exit_code != 0
+    assert "references unset environment variable: PYPI_API_TOKEN" in upload.output
 
 
 def test_chatpypi_init_chatarch_template(tmp_path):
@@ -213,8 +360,14 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     cli_text = (project_dir / "src" / "mychat_cli" / "cli.py").read_text(
         encoding="utf-8"
     )
+    assert "from mychat_cli import __version__" in cli_text
+    assert '@click.version_option(__version__, prog_name="mychat_cli")' in cli_text
     assert "from chatstyle import" in cli_text
     assert "CommandSchema" in cli_text
+    generated_test_text = (project_dir / "tests" / "test_cli.py").read_text(
+        encoding="utf-8"
+    )
+    assert "test_version_option_reports_package_version" in generated_test_text
     readme_text = (project_dir / "README.md").read_text(encoding="utf-8")
     assert readme_text.startswith('<div align="center">\n')
     assert "\n# mychat-cli\n\n" in readme_text
