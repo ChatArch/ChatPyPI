@@ -9,6 +9,21 @@ import sys
 import click
 
 from chatpypi import __version__
+from chatpypi.config import (
+    SESSION_TOKEN_ENV,
+    load_pypi_env_profile,
+    save_active_pypi_env_value,
+    save_pypi_env_profile_value,
+)
+from chatpypi.session_ops import (
+    PyPISessionError,
+    decode_session_token,
+    list_projects_from_session,
+    list_publishers_from_session,
+    load_session_payload_from_env,
+    login_to_pypi,
+    validate_session_payload,
+)
 from chatstyle import INTERACTIVE_OPTION_HELP
 from chatstyle import (
     abort_if_force_without_tty,
@@ -181,7 +196,7 @@ def auth():
 
 @auth.group(name="session")
 def auth_session():
-    """Inspect and manage local PyPI session files."""
+    """Inspect and manage env-backed PyPI session state."""
     pass
 
 
@@ -231,22 +246,36 @@ def _resolve_secret_env_var(
     *,
     option_label: str,
     env_var_name: str | None,
+    profile_values: dict[str, str] | None = None,
 ) -> str | None:
     if not env_var_name:
         return None
     env_var = env_var_name.strip()
     if not env_var:
         return None
-    value = os.environ.get(env_var)
+    value = None
+    if profile_values is not None and env_var in profile_values:
+        value = profile_values.get(env_var)
+    if value is None:
+        value = os.environ.get(env_var)
     if value is None:
         raise click.ClickException(
-            f"{option_label} references unset environment variable: {env_var}"
+            f"{option_label} references unset environment variable or profile key: {env_var}"
         )
     if not value:
         raise click.ClickException(
-            f"{option_label} references empty environment variable: {env_var}"
+            f"{option_label} references empty environment variable or profile key: {env_var}"
         )
     return value
+
+
+def _load_env_profile_values(env_profile: str | None) -> dict[str, str]:
+    if not env_profile:
+        return {}
+    try:
+        return load_pypi_env_profile(env_profile)
+    except (FileNotFoundError, ValueError) as exc:
+        raise click.ClickException(f"PyPI ChatEnv profile not found or invalid: {env_profile}") from exc
 
 
 def _planned_command_notice(command_path: str, summary: str) -> None:
@@ -256,28 +285,27 @@ def _planned_command_notice(command_path: str, summary: str) -> None:
     )
 
 
-def _load_session_payload(session_file: Path) -> dict:
+def _load_session_payload_from_token_option(
+    session_token: str | None = None,
+    token_env: str = SESSION_TOKEN_ENV,
+    env_profile: str | None = None,
+) -> dict:
     try:
-        payload = json.loads(session_file.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise click.ClickException(f"Session file not found: {session_file}") from exc
-    except json.JSONDecodeError as exc:
-        raise click.ClickException(
-            f"Session file is not valid JSON: {session_file}: {exc}"
-        ) from exc
-    if not isinstance(payload, dict):
-        raise click.ClickException(
-            f"Session file must contain a JSON object: {session_file}"
+        return load_session_payload_from_env(
+            token=session_token,
+            token_env=token_env,
+            env_profile=env_profile,
         )
-    return payload
+    except PyPISessionError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
-def _session_summary(payload: dict, session_file: Path) -> dict[str, object]:
+def _session_summary(payload: dict, source: str = "env") -> dict[str, object]:
     cookies = payload.get("cookies")
     csrf = payload.get("csrf")
     meta = payload.get("meta")
     return {
-        "path": str(session_file),
+        "source": source,
         "provider": payload.get("provider") or "pypi",
         "username": payload.get("username"),
         "created_at": payload.get("created_at"),
@@ -723,12 +751,101 @@ def probe(
 
 
 @auth.command(name="login")
-def auth_login():
-    """Plan the future login workflow entry point."""
-    _planned_command_notice(
-        "chatpypi auth login",
-        "Planned to exchange username/password/TOTP for a reusable local session file.",
+@click.option("--username", envvar="PYPI_USERNAME", default=None, help="PyPI username. Defaults to $PYPI_USERNAME.")
+@click.option(
+    "--password-env",
+    default="PYPI_PASSWORD",
+    show_default=True,
+    help="Environment variable containing the PyPI password.",
+)
+@click.option(
+    "--totp-env",
+    default="PYPI_TOTP_SECRET",
+    show_default=True,
+    help="Environment variable containing the PyPI TOTP secret, when 2FA is enabled.",
+)
+@click.option(
+    "-e",
+    "--env-profile",
+    default=None,
+    help="Named PyPI ChatEnv profile to read/write without activating it globally.",
+)
+@click.option(
+    "--write-env/--no-write-env",
+    default=True,
+    show_default=True,
+    help="Write the refreshed session token back to ChatEnv.",
+)
+@click.option("--base-url", default="https://pypi.org", show_default=True, help="PyPI base URL.")
+@click.option("--timeout", type=float, default=20.0, show_default=True, help="HTTP timeout in seconds.")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def auth_login(
+    username: str | None,
+    password_env: str,
+    totp_env: str | None,
+    env_profile: str | None,
+    write_env: bool,
+    base_url: str,
+    timeout: float,
+    output_format: str,
+):
+    """Log in to PyPI and refresh PYPI_SESSION_TOKEN in env/ChatEnv."""
+    profile_values = _load_env_profile_values(env_profile)
+    username = (
+        profile_values.get("PYPI_USERNAME")
+        if env_profile and profile_values.get("PYPI_USERNAME")
+        else _normalize_optional_text(username)
     )
+    if not username:
+        raise click.ClickException("PyPI username is required. Pass --username, set PYPI_USERNAME, or pass -e PROFILE.")
+    password = _resolve_secret_env_var(
+        option_label="--password-env",
+        env_var_name=password_env,
+        profile_values=profile_values,
+    )
+    totp_secret = None
+    if totp_env:
+        totp_secret = profile_values.get(totp_env) if env_profile else os.environ.get(totp_env)
+        if not totp_secret:
+            totp_secret = os.environ.get(totp_env)
+    try:
+        payload, session_token = login_to_pypi(
+            username=username,
+            password=password or "",
+            totp_secret=totp_secret,
+            base_url=base_url,
+            timeout=timeout,
+        )
+    except PyPISessionError as exc:
+        raise click.ClickException(str(exc)) from exc
+    written_path = None
+    if write_env:
+        written_path = (
+            save_pypi_env_profile_value(env_profile, SESSION_TOKEN_ENV, session_token)
+            if env_profile
+            else save_active_pypi_env_value(SESSION_TOKEN_ENV, session_token)
+        )
+    summary = _session_summary(payload, SESSION_TOKEN_ENV)
+    summary["authenticated"] = True
+    summary["env_key"] = SESSION_TOKEN_ENV
+    if env_profile:
+        summary["env_profile"] = env_profile
+    if written_path is not None:
+        summary["written_to"] = str(written_path)
+    if output_format == "json":
+        _echo_json(summary)
+        return
+    click.echo(f"Logged in as {username}")
+    if written_path is not None:
+        click.echo(f"updated_env={SESSION_TOKEN_ENV}")
+        click.echo(f"env_file={written_path}")
 
 
 @auth.command(name="logout")
@@ -742,11 +859,16 @@ def auth_logout():
 
 @auth.command(name="whoami")
 @click.option(
-    "--session-file",
-    type=click.Path(path_type=Path, dir_okay=False),
-    envvar="PYPI_SESSION_FILE",
+    "-e",
+    "--env-profile",
     default=None,
-    help="Session file to inspect. Defaults to $PYPI_SESSION_FILE.",
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
 )
 @click.option(
     "--format",
@@ -756,29 +878,30 @@ def auth_logout():
     show_default=True,
     help="Output format.",
 )
-def auth_whoami(session_file: Path | None, output_format: str):
-    """Inspect the current local session summary."""
-    if session_file is None:
-        raise click.ClickException(
-            "Session file is required. Pass --session-file or set PYPI_SESSION_FILE."
-        )
-    payload = _load_session_payload(session_file)
-    summary = _session_summary(payload, session_file)
+def auth_whoami(env_profile: str | None, session_token_env: str, output_format: str):
+    """Verify the current PyPI session by reading the account page."""
+    token_value = None if env_profile else os.getenv(session_token_env)
+    payload = _load_session_payload_from_token_option(
+        token_value,
+        session_token_env,
+        env_profile,
+    )
+    try:
+        verification = validate_session_payload(payload)
+    except PyPISessionError as exc:
+        raise click.ClickException(str(exc)) from exc
+    summary = _session_summary(payload, session_token_env)
+    if env_profile:
+        summary["env_profile"] = env_profile
+    summary.update(verification)
     if output_format == "json":
         _echo_json(summary)
         return
-    click.echo(f"profile session: {summary['path']}")
+    click.echo(f"session_source={session_token_env}")
     click.echo(f"provider={summary['provider']}")
     click.echo(f"username={summary['username'] or 'unknown'}")
-    click.echo(f"updated_at={summary['updated_at'] or 'unknown'}")
-    click.echo(
-        "email_verified="
-        + ("true" if summary["email_verified"] is True else "false" if summary["email_verified"] is False else "unknown")
-    )
-    click.echo(
-        "two_factor_enabled="
-        + ("true" if summary["two_factor_enabled"] is True else "false" if summary["two_factor_enabled"] is False else "unknown")
-    )
+    click.echo("authenticated=true")
+    click.echo(f"source_url={verification['source_url']}")
 
 
 @auth.command(name="register")
@@ -819,11 +942,16 @@ def auth_recovery_codes():
 
 @auth_session.command(name="show")
 @click.option(
-    "--session-file",
-    type=click.Path(path_type=Path, dir_okay=False),
-    envvar="PYPI_SESSION_FILE",
+    "-e",
+    "--env-profile",
     default=None,
-    help="Session file to inspect. Defaults to $PYPI_SESSION_FILE.",
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
 )
 @click.option(
     "--format",
@@ -833,18 +961,21 @@ def auth_recovery_codes():
     show_default=True,
     help="Output format.",
 )
-def auth_session_show(session_file: Path | None, output_format: str):
-    """Show a non-sensitive summary of the local session file."""
-    if session_file is None:
-        raise click.ClickException(
-            "Session file is required. Pass --session-file or set PYPI_SESSION_FILE."
-        )
-    payload = _load_session_payload(session_file)
-    summary = _session_summary(payload, session_file)
+def auth_session_show(env_profile: str | None, session_token_env: str, output_format: str):
+    """Show a non-sensitive summary of the env-backed session token."""
+    token_value = None if env_profile else os.getenv(session_token_env)
+    payload = _load_session_payload_from_token_option(
+        token_value,
+        session_token_env,
+        env_profile,
+    )
+    summary = _session_summary(payload, session_token_env)
+    if env_profile:
+        summary["env_profile"] = env_profile
     if output_format == "json":
         _echo_json(summary)
         return
-    click.echo(f"session_file={summary['path']}")
+    click.echo(f"session_source={summary['source']}")
     click.echo(f"provider={summary['provider']}")
     click.echo(f"username={summary['username'] or 'unknown'}")
     click.echo(f"created_at={summary['created_at'] or 'unknown'}")
@@ -861,7 +992,7 @@ def auth_session_export():
     """Plan the future session export workflow entry point."""
     _planned_command_notice(
         "chatpypi auth session export",
-        "Planned to export an in-memory or browser-derived session to the local session file.",
+        "Planned to export an env-backed or browser-derived session token to an explicit local backup.",
     )
 
 
@@ -876,23 +1007,215 @@ def auth_session_import():
 
 @auth_session.command(name="clear")
 @click.option(
-    "--session-file",
-    type=click.Path(path_type=Path, dir_okay=False),
-    envvar="PYPI_SESSION_FILE",
+    "-e",
+    "--env-profile",
     default=None,
-    help="Session file to remove. Defaults to $PYPI_SESSION_FILE.",
+    help="Named PyPI ChatEnv profile to clear without activating it globally.",
 )
-def auth_session_clear(session_file: Path | None):
-    """Delete the local session file if it exists."""
-    if session_file is None:
-        raise click.ClickException(
-            "Session file is required. Pass --session-file or set PYPI_SESSION_FILE."
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Active ChatEnv key to clear.",
+)
+def auth_session_clear(env_profile: str | None, session_token_env: str):
+    """Clear a ChatEnv PyPI session token value."""
+    path = (
+        save_pypi_env_profile_value(env_profile, session_token_env, "")
+        if env_profile
+        else save_active_pypi_env_value(session_token_env, "")
+    )
+    click.echo(f"Cleared {session_token_env} in {path}")
+
+
+@project.command(name="list")
+@click.option(
+    "-e",
+    "--env-profile",
+    default=None,
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def project_list(env_profile: str | None, session_token_env: str, output_format: str):
+    """List projects visible to the logged-in PyPI account."""
+    try:
+        payload = list_projects_from_session(
+            None if env_profile else os.getenv(session_token_env),
+            token_env=session_token_env,
+            env_profile=env_profile,
         )
-    if session_file.exists():
-        session_file.unlink()
-        click.echo(f"Removed session file: {session_file}")
+    except PyPISessionError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if output_format == "json":
+        _echo_json(payload)
+        return
+    click.echo(f"source_url={payload['source_url']}")
+    projects = payload.get("projects") or []
+    if not projects:
+        click.echo("projects: []")
+        return
+    click.echo("projects:")
+    for name in projects:
+        click.echo(f"- {name}")
+
+
+@publisher.command(name="list")
+@click.option(
+    "-e",
+    "--env-profile",
+    default=None,
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def publisher_list(env_profile: str | None, session_token_env: str, output_format: str):
+    """List active trusted publishers for the logged-in PyPI account."""
+    try:
+        payload = list_publishers_from_session(
+            None if env_profile else os.getenv(session_token_env),
+            token_env=session_token_env,
+            env_profile=env_profile,
+        )
+    except PyPISessionError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if output_format == "json":
+        _echo_json(payload)
+        return
+    click.echo(f"source_url={payload['source_url']}")
+    active = payload.get("active_publishers") or []
+    if not active:
+        click.echo("active_publishers: []")
+        return
+    click.echo("active_publishers:")
+    for item in active:
+        click.echo(f"- {item}")
+
+
+@publisher.command(name="pending-list")
+@click.option(
+    "-e",
+    "--env-profile",
+    default=None,
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def publisher_pending_list(env_profile: str | None, session_token_env: str, output_format: str):
+    """List pending trusted publishers for the logged-in PyPI account."""
+    try:
+        payload = list_publishers_from_session(
+            None if env_profile else os.getenv(session_token_env),
+            token_env=session_token_env,
+            env_profile=env_profile,
+        )
+    except PyPISessionError as exc:
+        raise click.ClickException(str(exc)) from exc
+    pending_payload = {
+        "capability": payload.get("capability"),
+        "source_url": payload.get("source_url"),
+        "pending_publishers": payload.get("pending_publishers") or [],
+        "pending_count": payload.get("pending_count") or 0,
+    }
+    if output_format == "json":
+        _echo_json(pending_payload)
+        return
+    click.echo(f"source_url={pending_payload['source_url']}")
+    pending = pending_payload["pending_publishers"]
+    if not pending:
+        click.echo("pending_publishers: []")
+        return
+    click.echo("pending_publishers:")
+    for item in pending:
+        click.echo(f"- {item}")
+
+
+@doctor.command(name="check")
+@click.option(
+    "-e",
+    "--env-profile",
+    default=None,
+    help="Named PyPI ChatEnv profile to read without activating it globally.",
+)
+@click.option(
+    "--session-token-env",
+    default=SESSION_TOKEN_ENV,
+    show_default=True,
+    help="Environment variable / ChatEnv key containing the PyPI session token.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+    help="Output format.",
+)
+def doctor_check(env_profile: str | None, session_token_env: str, output_format: str):
+    """Validate env-backed session token and logged-in PyPI manage-page access."""
+    checks: list[dict[str, object]] = []
+    try:
+        payload = _load_session_payload_from_token_option(
+            None if env_profile else os.getenv(session_token_env),
+            session_token_env,
+            env_profile,
+        )
+        checks.append({"name": "session_token", "status": "pass", "detail": session_token_env})
+        verification = validate_session_payload(payload)
+        checks.append({"name": "session_valid", "status": "pass", "detail": verification["source_url"]})
+    except click.ClickException as exc:
+        checks.append({"name": "session_token", "status": "fail", "detail": str(exc)})
+    except PyPISessionError as exc:
+        checks.append({"name": "session_valid", "status": "fail", "detail": str(exc)})
+    payload_out = {
+        "session_token_env": session_token_env,
+        "env_profile": env_profile,
+        "checks": checks,
+        "ok": all(item["status"] == "pass" for item in checks),
+    }
+    if output_format == "json":
+        _echo_json(payload_out)
     else:
-        click.echo(f"Session file already absent: {session_file}")
+        for item in checks:
+            click.echo(f"[{str(item['status']).upper()}] {item['name']}: {item['detail']}")
+    if not payload_out["ok"]:
+        raise click.ClickException("ChatPyPI doctor checks failed.")
 
 
 def _planned_group_leaf(group, name: str, summary: str):
@@ -912,14 +1235,7 @@ _planned_group_leaf(config, "list", "Planned to list persisted ChatPyPI config k
 _planned_group_leaf(config, "get", "Planned to read one persisted ChatPyPI config key.")
 _planned_group_leaf(config, "set", "Planned to write one persisted ChatPyPI config key.")
 _planned_group_leaf(config, "unset", "Planned to remove one persisted ChatPyPI config key.")
-_planned_group_leaf(project, "list", "Planned to list the logged-in account's PyPI projects.")
 _planned_group_leaf(project, "show", "Planned to show one logged-in account PyPI project.")
-_planned_group_leaf(publisher, "list", "Planned to list the logged-in account's active publishers.")
-_planned_group_leaf(
-    publisher,
-    "pending-list",
-    "Planned to list pending publishers from the logged-in account publishing page.",
-)
 _planned_group_leaf(
     publisher,
     "pending-add",
@@ -937,11 +1253,7 @@ _planned_group_leaf(
     "Planned to create a PyPI API token and persist the one-time secret in a private store.",
 )
 _planned_group_leaf(token, "revoke", "Planned to revoke a PyPI API token with confirmation.")
-_planned_group_leaf(
-    doctor,
-    "check",
-    "Planned to validate the active profile, session file, and read-only PyPI connectivity.",
-)
+
 
 
 @docs.command(name="links")

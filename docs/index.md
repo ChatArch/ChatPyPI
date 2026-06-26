@@ -35,12 +35,15 @@ chatpypi
 
 - `chatpypi --version`：输出当前包版本
 - `pkg`：包初始化、构建、校验、上传、名字探测
-- `auth whoami`
+- `auth login`：登录 PyPI 并把 `PYPI_SESSION_TOKEN` 写回 active ChatEnv PyPI profile
+- `auth whoami`：用 session 真实读取账号页确认登录态
 - `auth session show`
 - `auth session clear`
+- `project list`：读取 `/manage/projects/`
+- `publisher list` / `publisher pending-list`：读取 `/manage/account/publishing/`
 - `docs links|examples|open`
 
-其余命令现在先保留接口位置，后续逐步接入真实 PyPI / 浏览器协作流程。
+注册、邮箱验证、2FA 初始化、token 创建/删除和 publisher 写操作仍按人工 checkpoint / browser-assist 边界处理。
 
 兼容入口仍保留：
 
@@ -70,7 +73,9 @@ chatenv new -t pypi default
 
 最小变量：
 
-- `PYPI_SESSION_FILE`：本地 session JSON 文件路径；用于 `chatpypi auth whoami`、`chatpypi auth session show|clear`
+- `PYPI_USERNAME`：PyPI 用户名；用于 `chatpypi auth login`
+- `PYPI_PASSWORD`：PyPI 密码；只通过 `--password-env` 间接读取
+- `PYPI_SESSION_TOKEN`：网页登录态 token；由 `chatpypi auth login` 生成/刷新并写回 ChatEnv
 - `PYPI_API_TOKEN`：PyPI API token；用于 `chatpypi pkg upload --token-env PYPI_API_TOKEN`
 
 常见可选变量：
@@ -84,16 +89,23 @@ chatenv new -t pypi default
 约定：
 
 - `--token-env` / `--password-env` 传的是“环境变量名”，不是秘密本身；
-- session 文件应按 profile 隔离，通常一个 profile 一个 `PYPI_SESSION_FILE`；
+- `PYPI_SESSION_TOKEN` 应按 ChatEnv profile 隔离；过期时重新执行 `chatpypi auth login` 覆盖刷新；可用 `-e/--env-profile NAME` 指定 named profile，而不切换全局默认；
 - CLI 默认只展示 session 摘要，不直接打印 cookie / token；
 - `.env` 若含空格值，应避免直接 `source`。
 
 示例：
 
 ```bash
-export PYPI_SESSION_FILE="$HOME/.config/chatpypi/default/session.json"
-export PYPI_API_TOKEN="pypi-***"
+export PYPI_USERNAME="your-pypi-user"
+read -rsp "PyPI password: " PYPI_PASSWORD; echo; export PYPI_PASSWORD
+read -rsp "PyPI TOTP secret: " PYPI_TOTP_SECRET; echo; export PYPI_TOTP_SECRET
+read -rsp "PyPI API token: " PYPI_API_TOKEN; echo; export PYPI_API_TOKEN
 
+chatpypi auth login --password-env PYPI_PASSWORD --totp-env PYPI_TOTP_SECRET
+chatpypi auth whoami --format json
+chatpypi project list --format json
+chatpypi publisher list --format json
+chatpypi publisher pending-list --format json
 chatpypi auth session show --format json
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```

@@ -91,11 +91,13 @@ chatpypi
 Current implementation focus:
 
 - `pkg`: package init/build/check/upload/probe
-- `auth whoami` / `auth session show|clear`: local session summary helpers
+- `auth login`: log in to PyPI with username/password and optional TOTP, then refresh `PYPI_SESSION_TOKEN` in the active ChatEnv PyPI profile
+- `auth whoami` / `auth session show|clear`: validate the saved session and show non-sensitive local summaries
+- `project list`: read the logged-in account's PyPI projects page
+- `publisher list` / `publisher pending-list`: read the logged-in account's Publishing page
 - `docs`: documentation links and example commands
 
-The remaining subcommands are reserved entry points so the public tree can stay
-stable while the deeper workflows land.
+Registration, email verification, 2FA bootstrap, token create/revoke, and publisher write operations remain checkpoint-aware browser-assist flows instead of unconditional headless automation.
 
 Legacy shortcuts remain available:
 
@@ -126,7 +128,10 @@ PyPI-related values should live in a ChatEnv profile, shell env, `.env`, or a lo
 The minimum set currently falls into two categories:
 
 - Session-backed read flows:
-  - `PYPI_SESSION_FILE`: path to the local session JSON file
+  - `PYPI_USERNAME`: PyPI username for `chatpypi auth login`
+  - `PYPI_PASSWORD`: PyPI password, read indirectly through `--password-env`
+  - `PYPI_TOTP_SECRET`: optional TOTP secret for 2FA checkpoints
+  - `PYPI_SESSION_TOKEN`: web-session token generated/refreshed by `chatpypi auth login` and stored in ChatEnv
 - Manual uploads:
   - `PYPI_API_TOKEN`: PyPI API token used with `chatpypi pkg upload --token-env PYPI_API_TOKEN`
 
@@ -142,17 +147,23 @@ Recommended rules:
 - do not pass tokens or passwords directly on the command line;
 - `--token-env` / `--password-env` accept an env var name, and the CLI resolves
   the secret value at runtime;
-- `PYPI_SESSION_FILE` should point to one session file for one local profile,
-  and the CLI only prints non-sensitive summaries instead of raw cookies;
+- `PYPI_SESSION_TOKEN` is sensitive and is written back to the active ChatEnv PyPI profile by `chatpypi auth login`; use `-e/--env-profile NAME` to read or write a named profile without activating it globally; the CLI only prints non-sensitive summaries instead of raw cookies;
 - if a `.env` file contains values with spaces, avoid blindly running
   `source .env`; parse it safely instead.
 
 Example:
 
 ```bash
-export PYPI_SESSION_FILE="$HOME/.config/chatpypi/default/session.json"
-export PYPI_API_TOKEN="pypi-***"
+export PYPI_USERNAME="your-pypi-user"
+read -rsp "PyPI password: " PYPI_PASSWORD; echo; export PYPI_PASSWORD
+read -rsp "PyPI TOTP secret: " PYPI_TOTP_SECRET; echo; export PYPI_TOTP_SECRET
+read -rsp "PyPI API token: " PYPI_API_TOKEN; echo; export PYPI_API_TOKEN
 
+chatpypi auth login --password-env PYPI_PASSWORD --totp-env PYPI_TOTP_SECRET
+chatpypi auth whoami --format json
+chatpypi project list --format json
+chatpypi publisher list --format json
+chatpypi publisher pending-list --format json
 chatpypi auth session show --format json
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
