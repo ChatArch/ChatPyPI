@@ -565,12 +565,15 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / "src" / "mychat_cli" / "config.py").exists()
     assert "from mychat_cli import __version__" in cli_text
     assert '@click.version_option(__version__, prog_name="mychat_cli")' in cli_text
-    assert "from chatstyle import" in cli_text
-    assert "CommandSchema" in cli_text
+    assert "HELLO_SCHEMA" not in cli_text
+    assert "def hello" not in cli_text
+    assert "Hello, ChatArch" not in cli_text
     generated_test_text = (project_dir / "tests" / "test_cli.py").read_text(
         encoding="utf-8"
     )
     assert "test_version_option_reports_package_version" in generated_test_text
+    assert "test_hello" not in generated_test_text
+    assert "Hello, ChatArch" not in generated_test_text
     readme_text = (project_dir / "README.md").read_text(encoding="utf-8")
     assert readme_text.startswith('<div align="center">\n')
     assert "\n# mychat-cli\n\n" in readme_text
@@ -581,6 +584,9 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "https://ChatArch.github.io/mychat-cli" in readme_text
     assert "OWNER/REPO" not in readme_text
     assert "docs-mkdocs" in readme_text
+    assert "mychat_cli --help" in readme_text
+    assert "mychat_cli --version" in readme_text
+    assert "hello ChatArch" not in readme_text
     assert "CommandSchema" in readme_text
     config_text = (project_dir / "src" / "mychat_cli" / "config.py").read_text(
         encoding="utf-8"
