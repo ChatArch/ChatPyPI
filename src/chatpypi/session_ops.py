@@ -58,6 +58,7 @@ class FormParser(HTMLParser):
         super().__init__()
         self.forms: list[HtmlForm] = []
         self._current_form: dict[str, Any] | None = None
+        self._current_button_parts: list[str] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attrs_dict = {key: value or "" for key, value in attrs}
@@ -568,17 +569,95 @@ def _table_records_for_keywords(html: str, keywords: tuple[str, ...]) -> list[di
             }
             if len(headers) == len(row) and any(headers):
                 record["fields"] = dict(zip(headers, row))
+            _augment_publisher_record(record)
             records.append(record)
     return records
+
+
+def _value_after_label(text: str, label: str, next_labels: tuple[str, ...]) -> str | None:
+    marker = f"{label}:"
+    if marker not in text:
+        return None
+    value = text.split(marker, 1)[1]
+    for next_label in next_labels:
+        next_marker = f"{next_label}:"
+        if next_marker in value:
+            value = value.split(next_marker, 1)[0]
+    value = " ".join(value.split()).strip()
+    return value or None
+
+
+def _normalize_publisher_environment(value: str | None) -> str:
+    if value is None or not value.strip():
+        return "(Any)"
+    if value.strip() in {"Any", "(Any)"}:
+        return "(Any)"
+    return value.strip()
+
+
+def _augment_publisher_record(record: dict[str, Any]) -> None:
+    fields = record.get("fields") or {}
+    values = record.get("values") or []
+    detail_text = str(fields.get("Details") or fields.get("Detail") or "")
+    if not detail_text:
+        detail_text = " ".join(str(value) for value in values if value)
+
+    publisher = fields.get("Publisher") or fields.get("Provider")
+    if publisher:
+        record["publisher"] = publisher
+    elif "GitHub" in detail_text:
+        record["publisher"] = "GitHub"
+
+    project = fields.get("Project") or fields.get("Pending project name") or _value_after_label(
+        detail_text, "Pending project name", ("Publisher", "Repository", "Workflow", "Environment name", "Environment", "Remove")
+    )
+    if project:
+        record["project"] = project
+
+    repository = _value_after_label(detail_text, "Repository", ("Workflow", "Environment name", "Environment", "Remove"))
+    workflow = _value_after_label(detail_text, "Workflow", ("Environment name", "Environment", "Remove"))
+    environment = _value_after_label(detail_text, "Environment name", ("Remove",))
+    if environment is None:
+        environment = _value_after_label(detail_text, "Environment", ("Remove",))
+
+    if repository:
+        record["repository"] = repository
+    if workflow:
+        record["workflow"] = workflow
+    if repository or workflow or environment is not None:
+        record["environment"] = _normalize_publisher_environment(environment)
+
+
+def _active_publisher_records(html: str) -> list[dict[str, Any]]:
+    records = _table_records_for_keywords(html, ("active", "current", "openid connect publishers associated"))
+    return [record for record in records if record.get("publisher") or record.get("repository") or record.get("workflow")]
+
+
+def find_github_publisher(
+    payload: dict[str, Any], *, owner: str, repository: str, workflow: str, environment: str | None = None
+) -> dict[str, Any] | None:
+    expected_repo = f"{owner}/{repository}"
+    expected_env = _normalize_publisher_environment(environment)
+    for record in payload.get("publisher_details") or []:
+        if record.get("publisher") != "GitHub":
+            continue
+        if record.get("repository") != expected_repo:
+            continue
+        if record.get("workflow") != workflow:
+            continue
+        if _normalize_publisher_environment(record.get("environment")) != expected_env:
+            continue
+        return record
+    return None
 
 
 def parse_publishing_page(html: str) -> dict[str, Any]:
     text = TextLinkParser()
     text.feed(html)
     page_text = text.text.lower()
-    active = _table_records_for_keywords(html, ("active",))
+    active = _active_publisher_records(html)
     pending = _table_records_for_keywords(html, ("pending",))
-    publisher_details: list[dict[str, Any]] = []
+    publisher_details: list[dict[str, Any]] = list(active)
     detail_parser = SectionTableParser()
     detail_parser.feed(html)
     for heading, rows in detail_parser.sections:
@@ -591,9 +670,13 @@ def parse_publishing_page(html: str) -> dict[str, Any]:
             record: dict[str, Any] = {"section": heading, "values": row}
             if len(headers) == len(row) and any(headers):
                 record["fields"] = dict(zip(headers, row))
+            _augment_publisher_record(record)
             publisher_details.append(record)
     if "no active" in page_text and "publisher" in page_text:
         active = []
+        publisher_details = []
+    elif not active and publisher_details:
+        active = list(publisher_details)
     if "no pending" in page_text and "publisher" in page_text:
         pending = []
     return {
@@ -603,6 +686,259 @@ def parse_publishing_page(html: str) -> dict[str, Any]:
         "active_count": len(active),
         "pending_count": len(pending),
     }
+
+
+def find_pending_github_publisher(
+    payload: dict[str, Any], *, project: str, owner: str, repository: str, workflow: str, environment: str | None = None
+) -> dict[str, Any] | None:
+    expected_repo = f"{owner}/{repository}"
+    expected_env = _normalize_publisher_environment(environment)
+    for record in payload.get("pending_publishers") or []:
+        if record.get("project") not in {None, project} and project not in " ".join(map(str, record.get("values") or [])):
+            continue
+        if record.get("publisher") not in {None, "GitHub"}:
+            continue
+        if record.get("repository") not in {None, expected_repo} and expected_repo not in " ".join(map(str, record.get("values") or [])):
+            continue
+        if record.get("workflow") not in {None, workflow} and workflow not in " ".join(map(str, record.get("values") or [])):
+            continue
+        if record.get("environment") is not None and _normalize_publisher_environment(record.get("environment")) != expected_env:
+            continue
+        return record
+    return None
+
+
+def _account_publishing_url(base_url: str) -> str:
+    return urljoin(base_url.rstrip("/") + "/", "manage/account/publishing/")
+
+
+def _find_github_pending_publisher_form(forms: list[HtmlForm]) -> HtmlForm:
+    required = {"csrf_token", "project_name", "owner", "repository", "workflow_filename", "environment"}
+    for form in forms:
+        if required <= form.names:
+            return form
+    raise PyPISessionError("Could not find GitHub pending trusted publisher form on account page.")
+
+
+def add_pending_github_publisher_from_payload(
+    payload: dict[str, Any],
+    project: str,
+    *,
+    owner: str,
+    repository: str,
+    workflow: str,
+    environment: str | None = None,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+    session = requests_session_from_payload(payload)
+    url = _account_publishing_url(base_url)
+    before_response = session.get(url, timeout=timeout)
+    _assert_logged_in_response(before_response)
+    before = parse_publishing_page(before_response.text)
+    existing = find_pending_github_publisher(
+        before, project=project, owner=owner, repository=repository, workflow=workflow, environment=environment
+    )
+    posted = False
+    post_status: int | None = None
+    if existing is None:
+        form = _find_github_pending_publisher_form(parse_forms(before_response.text))
+        csrf = form.hidden_values().get("csrf_token")
+        if csrf is None:
+            raise PyPISessionError("Could not find CSRF token in GitHub pending publisher form.")
+        post = session.post(
+            _form_action_url(base_url, form, "/manage/account/publishing/"),
+            data={
+                "csrf_token": csrf,
+                "project_name": project,
+                "owner": owner,
+                "repository": repository,
+                "workflow_filename": workflow,
+                "environment": environment or "",
+            },
+            headers={"Referer": before_response.url, "Origin": base_url},
+            timeout=timeout,
+            allow_redirects=True,
+        )
+        posted = True
+        post_status = post.status_code
+    after = list_publishers_from_payload(payload, timeout=timeout)
+    pending = find_pending_github_publisher(
+        after, project=project, owner=owner, repository=repository, workflow=workflow, environment=environment
+    )
+    ok = pending is not None
+    after.update(
+        {
+            "target": {"project": project, "owner": owner, "repository": repository, "workflow": workflow, "environment": _normalize_publisher_environment(environment)},
+            "already_pending_before": existing is not None,
+            "posted": posted,
+            "post_status": post_status,
+            "ok": ok,
+            "matched_publisher": pending,
+        }
+    )
+    if not ok:
+        raise PyPISessionError("GitHub pending trusted publisher was not found after write/readback.")
+    return after
+
+
+def remove_pending_github_publisher_from_payload(
+    payload: dict[str, Any],
+    project: str,
+    *,
+    owner: str,
+    repository: str,
+    workflow: str,
+    environment: str | None = None,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    """Remove a matching pending GitHub publisher if present.
+
+    If no matching pending publisher exists, this succeeds without mutation.
+    """
+    base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+    session = requests_session_from_payload(payload)
+    url = _account_publishing_url(base_url)
+    before_response = session.get(url, timeout=timeout)
+    _assert_logged_in_response(before_response)
+    before = parse_publishing_page(before_response.text)
+    pending = before.get("pending_publishers") or []
+    existing = find_pending_github_publisher(
+        before, project=project, owner=owner, repository=repository, workflow=workflow, environment=environment
+    )
+    target = {"project": project, "owner": owner, "repository": repository, "workflow": workflow, "environment": _normalize_publisher_environment(environment)}
+    if existing is None:
+        before.update({"target": target, "removed": False, "ok": True})
+        return before
+
+    remove_forms = [form for form in parse_forms(before_response.text) if "publisher_id" in form.names]
+    try:
+        index = pending.index(existing)
+        form = remove_forms[index]
+    except (ValueError, IndexError) as exc:
+        raise PyPISessionError("Matching pending publisher exists, but no matching remove form was found.") from exc
+
+    hidden = form.hidden_values()
+    csrf = hidden.get("csrf_token")
+    publisher_id = hidden.get("publisher_id")
+    if not csrf or not publisher_id:
+        raise PyPISessionError("Pending publisher remove form is missing CSRF token or publisher_id.")
+    post = session.post(
+        _form_action_url(base_url, form, "/manage/account/publishing/"),
+        data={"csrf_token": csrf, "publisher_id": publisher_id},
+        headers={"Referer": before_response.url, "Origin": base_url},
+        timeout=timeout,
+        allow_redirects=True,
+    )
+    after = list_publishers_from_payload(payload, timeout=timeout)
+    still_present = find_pending_github_publisher(
+        after, project=project, owner=owner, repository=repository, workflow=workflow, environment=environment
+    )
+    ok = still_present is None
+    after.update({"target": target, "removed": ok, "post_status": post.status_code, "ok": ok})
+    if not ok:
+        raise PyPISessionError("Matching pending publisher still exists after removal attempt.")
+    return after
+
+
+def _project_publishing_url(base_url: str, project: str) -> str:
+    return urljoin(base_url.rstrip("/") + "/", f"manage/project/{project}/settings/publishing/")
+
+
+def publisher_detail_from_payload(
+    payload: dict[str, Any], project: str, *, timeout: float = 20.0
+) -> dict[str, Any]:
+    base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+    session = requests_session_from_payload(payload)
+    url = _project_publishing_url(base_url, project)
+    response = session.get(url, timeout=timeout)
+    _assert_logged_in_response(response)
+    parsed = parse_publishing_page(response.text)
+    parsed.update({"capability": "session", "project": project, "source_url": response.url})
+    return parsed
+
+
+def _find_github_active_publisher_form(forms: list[HtmlForm]) -> HtmlForm:
+    required = {"csrf_token", "owner", "repository", "workflow_filename", "environment"}
+    for form in forms:
+        if required <= form.names and "project_name" not in form.names:
+            return form
+    raise PyPISessionError("Could not find GitHub active trusted publisher form on project page.")
+
+
+def add_github_publisher_to_project_from_payload(
+    payload: dict[str, Any],
+    project: str,
+    *,
+    owner: str,
+    repository: str,
+    workflow: str,
+    environment: str | None = None,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
+    session = requests_session_from_payload(payload)
+    url = _project_publishing_url(base_url, project)
+    before_response = session.get(url, timeout=timeout)
+    _assert_logged_in_response(before_response)
+    before = parse_publishing_page(before_response.text)
+    existing = find_github_publisher(
+        before,
+        owner=owner,
+        repository=repository,
+        workflow=workflow,
+        environment=environment,
+    )
+    posted = False
+    post_status: int | None = None
+    if existing is None:
+        form = _find_github_active_publisher_form(parse_forms(before_response.text))
+        csrf = form.hidden_values().get("csrf_token")
+        if csrf is None:
+            raise PyPISessionError("Could not find CSRF token in GitHub active publisher form.")
+        post_url = _form_action_url(base_url, form, f"/manage/project/{project}/settings/publishing/")
+        post = session.post(
+            post_url,
+            data={
+                "csrf_token": csrf,
+                "owner": owner,
+                "repository": repository,
+                "workflow_filename": workflow,
+                "environment": environment or "",
+            },
+            headers={"Referer": before_response.url, "Origin": base_url},
+            timeout=timeout,
+            allow_redirects=True,
+        )
+        post_status = post.status_code
+        posted = True
+    after = publisher_detail_from_payload(payload, project, timeout=timeout)
+    active = find_github_publisher(
+        after,
+        owner=owner,
+        repository=repository,
+        workflow=workflow,
+        environment=environment,
+    )
+    ok = active is not None
+    after.update(
+        {
+            "target": {
+                "owner": owner,
+                "repository": repository,
+                "workflow": workflow,
+                "environment": _normalize_publisher_environment(environment),
+            },
+            "already_active_before": existing is not None,
+            "posted": posted,
+            "post_status": post_status,
+            "ok": ok,
+            "matched_publisher": active,
+        }
+    )
+    if not ok:
+        raise PyPISessionError("GitHub active trusted publisher was not found after write/readback.")
+    return after
 
 
 def list_publishers_from_payload(
@@ -635,10 +971,14 @@ def list_publishers_from_session(
 __all__ = [
     "DEFAULT_BASE_URL",
     "PyPISessionError",
+    "add_github_publisher_to_project_from_payload",
+    "add_pending_github_publisher_from_payload",
     "build_session_payload",
     "decode_session_token",
     "encode_session_token",
     "extract_project_names",
+    "find_github_publisher",
+    "find_pending_github_publisher",
     "list_projects_from_payload",
     "list_projects_from_session",
     "list_publishers_from_payload",
@@ -648,6 +988,8 @@ __all__ = [
     "login_to_pypi",
     "parse_forms",
     "parse_publishing_page",
+    "publisher_detail_from_payload",
+    "remove_pending_github_publisher_from_payload",
     "requests_session_from_payload",
     "save_session_payload",
     "totp_now",

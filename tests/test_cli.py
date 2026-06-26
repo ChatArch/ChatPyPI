@@ -28,7 +28,17 @@ def test_version_option_reports_package_version():
     result = CliRunner().invoke(cli, ["--version"])
 
     assert result.exit_code == 0
-    assert "chatpypi, version 0.2.2" in result.output
+    assert "chatpypi, version 0.2.3" in result.output
+
+
+def test_publisher_help_lists_direct_active_commands():
+    result = CliRunner().invoke(cli, ["publisher", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "detail" in result.output
+    assert "add-github" in result.output
+    assert "pending-add" in result.output
+    assert "pending-remove" in result.output
 
 
 def test_auth_session_show_uses_env_session_token(monkeypatch):

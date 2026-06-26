@@ -23,7 +23,8 @@ chatpypi
 ├── project
 │   ├── list / show
 ├── publisher
-│   ├── list / pending-list / pending-add / pending-remove
+│   ├── list / detail / add-github
+│   ├── pending-list / pending-add / pending-remove
 ├── token
 │   ├── list / create / revoke
 ├── doctor
@@ -41,10 +42,10 @@ Current implemented path:
 - `auth session show`
 - `auth session clear`
 - `project list`: read `/manage/projects/`
-- `publisher list` / `publisher pending-list`: read `/manage/account/publishing/`
+- `publisher list` / `publisher detail` / `publisher add-github`: read and directly configure active Trusted Publishers for existing PyPI projects; `pending-*` is only for pre-registration pending exceptions or stale pending cleanup
 - `docs links|examples|open`
 
-Registration, email verification, 2FA bootstrap, token create/revoke, and publisher write operations remain checkpoint-aware browser-assist flows.
+Registration, email verification, 2FA bootstrap, token create/revoke, and other flows that need human validation, QR/device checks, or complex checkpoints remain checkpoint-aware. Publisher writes for existing PyPI projects should not be pending.
 
 Legacy shortcuts remain available:
 

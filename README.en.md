@@ -73,6 +73,8 @@ chatpypi
 │   └── show
 ├── publisher
 │   ├── list
+│   ├── detail
+│   ├── add-github
 │   ├── pending-list
 │   ├── pending-add
 │   └── pending-remove
@@ -94,10 +96,12 @@ Current implementation focus:
 - `auth login`: log in to PyPI with username/password and optional TOTP, then refresh `PYPI_SESSION_TOKEN` in the active ChatEnv PyPI profile
 - `auth whoami` / `auth session show|clear`: validate the saved session and show non-sensitive local summaries
 - `project list`: read the logged-in account's PyPI projects page
-- `publisher list` / `publisher pending-list`: read the logged-in account's Publishing page
+- `publisher list` / `publisher detail`: read account-level and project-level Trusted Publisher state
+- `publisher add-github`: directly add or idempotently verify a GitHub active Trusted Publisher for an existing PyPI project, with readback verification
+- `publisher pending-list` / `pending-add` / `pending-remove`: only for truly pending pre-registration exceptions or stale pending cleanup; this is not the default Publisher path
 - `docs`: documentation links and example commands
 
-Registration, email verification, 2FA bootstrap, token create/revoke, and publisher write operations remain checkpoint-aware browser-assist flows instead of unconditional headless automation.
+Registration, email verification, 2FA bootstrap, token create/revoke, and other flows that need human validation, QR/device checks, or complex checkpoints remain checkpoint-aware. Publisher writes for existing PyPI projects should not be pending; use `publisher add-github` and read back the active publisher.
 
 Legacy shortcuts remain available:
 

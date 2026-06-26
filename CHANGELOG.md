@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 - 2026-06-27
+
+### Added
+
+- Add direct active Trusted Publisher operations for existing PyPI projects:
+  - `chatpypi publisher detail <project>` reads project-level publisher details.
+  - `chatpypi publisher add-github <project> --owner ... --repo ... --workflow ...` adds or idempotently verifies a GitHub active publisher with readback.
+- Parse project publisher pages into structured `publisher`, `repository`, `workflow`, and normalized environment fields.
+
+### Changed
+
+- Clarify that `pending-*` publisher commands are only for true pending registration/pre-project exceptions or stale pending cleanup. Existing PyPI project Publisher writes should go through active `add-github`, not a pending flow.
+
 ## 0.2.2 - 2026-06-26
 
 ### Fixed
