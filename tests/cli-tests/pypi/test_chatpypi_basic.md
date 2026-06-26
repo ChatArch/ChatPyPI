@@ -1,6 +1,6 @@
 # test_chatpypi_basic
 
-测试 `chatpypi` 的基础 CLI 链路，覆盖 legacy root aliases、`pkg` 命名空间、session 文件读取与手动 token 上传入口。
+测试 `chatpypi` 的基础 CLI 链路，覆盖版本输出、legacy root aliases、`pkg` 命名空间、session 文件读取与手动 token 上传入口。
 
 ## 元信息
 
@@ -10,6 +10,21 @@
 - 前置条件：本地可执行 Python，临时目录可写。
 - 环境准备：创建一个最小 Python 包目录，包含 `pyproject.toml`、`README.md`、`LICENSE`。
 - 回滚：删除临时目录。
+
+## 用例 0：顶层版本输出
+
+- 初始环境准备：
+  - 当前 `chatpypi` 包可导入。
+
+预期过程和结果：
+  1. 执行 `chatpypi --version`。
+  2. 预期输出当前包版本，例如 `chatpypi, version 0.2.0`。
+
+参考执行脚本（伪代码）：
+
+```sh
+chatpypi --version
+```
 
 ## 用例 1：init 生成最小 Python 包
 
@@ -96,6 +111,7 @@ python -m pytest -q
   1. 执行 `chatpypi pkg upload --project-dir <tmp>/mychat --token-env PYPI_API_TOKEN`。
   2. 预期 CLI 把上传动作路由到 `twine upload`。
   3. 预期 CLI 使用 `__token__` 作为用户名，并通过环境变量把 token 传给 `TWINE_PASSWORD`，而不是把秘密直接拼到命令行里。
+  4. 若底层工具输出中包含该 token 值，CLI 对用户展示前必须脱敏为 `[REDACTED]`。
 
 参考执行脚本（伪代码）：
 
@@ -132,6 +148,26 @@ chatpypi auth session show --format json
   1. 执行 `chatpypi pkg upload --project-dir <tmp>/mychat --token-env PYPI_API_TOKEN`。
   2. 预期 CLI 直接失败，不进入 `twine upload`。
   3. 预期错误消息明确指出 `PYPI_API_TOKEN` 未设置，便于用户修正 env 配置。
+
+## 用例 7：session 文件必须是 JSON object
+
+- 初始环境准备：
+  - 本地存在一个合法 JSON 但非 object 的 session 文件，例如 `[]`。
+
+预期过程和结果：
+  1. 执行 `chatpypi auth session show --session-file <file>`。
+  2. 预期 CLI 非 0 退出。
+  3. 预期错误消息明确指出 session 文件必须是 JSON object，不能抛出 traceback。
+
+## 用例 8：预留操作命令不能成功退出
+
+- 初始环境准备：
+  - 当前命令树包含未来预留的操作命令，例如 `token create`。
+
+预期过程和结果：
+  1. 执行 `chatpypi token create`。
+  2. 预期 CLI 非 0 退出。
+  3. 预期错误消息明确指出该命令尚未实现，避免自动化误判为成功执行。
 
 ## 清理 / 回滚
 

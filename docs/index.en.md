@@ -34,6 +34,7 @@ chatpypi
 
 Current implemented path:
 
+- `chatpypi --version`: print the current package version
 - `pkg`: package init, build, check, upload, and name probe
 - `auth whoami`
 - `auth session show`

@@ -21,3 +21,10 @@ def test_help_lists_pypi_commands():
     assert "check" in result.output
     assert "probe" in result.output
     assert "upload" in result.output
+
+
+def test_version_option_reports_package_version():
+    result = CliRunner().invoke(cli, ["--version"])
+
+    assert result.exit_code == 0
+    assert "chatpypi, version 0.2.0" in result.output

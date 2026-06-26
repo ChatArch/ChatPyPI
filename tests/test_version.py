@@ -73,6 +73,29 @@ def test_build_package_logs_and_returns_artifacts(tmp_path, caplog):
     assert "Built package distributions" in caplog.text
 
 
+def test_upload_distributions_accepts_two_argument_runner(tmp_path):
+    project_dir = tmp_path / "DemoUpload"
+    dist_dir = project_dir / "dist"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "demo-0.1.0-py3-none-any.whl").write_text(
+        "wheel", encoding="utf-8"
+    )
+
+    def old_style_runner(args, cwd):
+        assert "upload" in args
+        assert cwd == project_dir
+        return CommandResult(args=list(args), returncode=0, stdout="uploaded", stderr="")
+
+    result, files = chatpypi.upload_distributions(
+        project_dir,
+        runner=old_style_runner,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "uploaded"
+    assert [path.name for path in files] == ["demo-0.1.0-py3-none-any.whl"]
+
+
 def test_check_distributions_error_mentions_chatpypi_build(tmp_path):
     project_dir = tmp_path / "EmptyDist"
     project_dir.mkdir()

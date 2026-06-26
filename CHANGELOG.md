@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.0 - 2026-06-26
+
+### Added
+
+- Introduce the first public grouped CLI tree: `auth`, `profile`, `config`, `pkg`, `project`, `publisher`, `token`, `doctor`, and `docs`, while keeping legacy root aliases for `init/build/check/upload/probe`.
+- Add `chatpypi auth session show|clear` and `chatpypi auth whoami` as the first local-session inspection helpers.
+- Add `chatpypi pkg upload --token-env ...` / `--password-env ...` for manual token-backed uploads without exposing secrets on the command line.
+- Add generated `chatarch` template support for `--version` on the scaffolded CLI.
+
+### Changed
+
+- Update README and docs index pages to reflect the merged CLI tree and manual token upload path.
+- Document the full reserved CLI tree plus the current env configuration for session-backed reads and manual token uploads.
+- Make reserved operational commands fail non-zero until their real implementations land.
+
+### Fixed
+
+- Add a top-level `chatpypi --version` release-gate smoke path.
+- Validate that session files contain JSON objects instead of crashing on other JSON shapes.
+- Redact token/password environment values from upload subprocess output before echoing it.
+- Preserve two-argument `upload_distributions(..., runner=...)` compatibility when no env override is provided.
+- Add CLI coverage for `PYPI_SESSION_FILE` reads and clearer failure behavior when a required secret env var is unset.
+
 ## 0.1.4 - 2026-06-25
 
 ### Fixed
@@ -27,20 +50,3 @@
 - Extract ChatTool PyPI helpers into the standalone ChatPyPI package.
 - Expose importable Python APIs for scaffold/build/check/probe/upload helpers.
 - Provide `chatpypi` CLI as a thin adapter over the package API.
-
-## 0.2.0 - 2026-06-26
-
-### Added
-
-- Introduce the first public grouped CLI tree: `auth`, `profile`, `config`, `pkg`, `project`, `publisher`, `token`, `doctor`, and `docs`, while keeping legacy root aliases for `init/build/check/upload/probe`.
-- Add `chatpypi auth session show|clear` and `chatpypi auth whoami` as the first local-session inspection helpers.
-- Add `chatpypi pkg upload --token-env ...` / `--password-env ...` for manual token-backed uploads without exposing secrets on the command line.
-
-### Changed
-
-- Update README and docs index pages to reflect the merged CLI tree and manual token upload path.
-- Document the full reserved CLI tree plus the current env configuration for session-backed reads and manual token uploads.
-
-### Fixed
-
-- Add CLI coverage for `PYPI_SESSION_FILE` reads and clearer failure behavior when a required secret env var is unset.

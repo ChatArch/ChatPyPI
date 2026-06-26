@@ -8,6 +8,7 @@ import sys
 
 import click
 
+from chatpypi import __version__
 from chatstyle import INTERACTIVE_OPTION_HELP
 from chatstyle import (
     abort_if_force_without_tty,
@@ -160,6 +161,7 @@ def _resolve_project_and_dist_dirs(
 
 
 @click.group(name="chatpypi")
+@click.version_option(__version__, prog_name="chatpypi")
 def cli():
     """Python package lifecycle and PyPI operations helpers."""
     pass
@@ -248,20 +250,26 @@ def _resolve_secret_env_var(
 
 
 def _planned_command_notice(command_path: str, summary: str) -> None:
-    click.echo(f"{command_path} is reserved for the new ChatPyPI infra.")
-    click.echo(summary)
-    click.echo("This command tree is being introduced before the full workflow lands.")
+    raise click.ClickException(
+        f"{command_path} is reserved for the new ChatPyPI infra but is not implemented yet. "
+        f"{summary}"
+    )
 
 
 def _load_session_payload(session_file: Path) -> dict:
     try:
-        return json.loads(session_file.read_text(encoding="utf-8"))
+        payload = json.loads(session_file.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise click.ClickException(f"Session file not found: {session_file}") from exc
     except json.JSONDecodeError as exc:
         raise click.ClickException(
             f"Session file is not valid JSON: {session_file}: {exc}"
         ) from exc
+    if not isinstance(payload, dict):
+        raise click.ClickException(
+            f"Session file must contain a JSON object: {session_file}"
+        )
+    return payload
 
 
 def _session_summary(payload: dict, session_file: Path) -> dict[str, object]:

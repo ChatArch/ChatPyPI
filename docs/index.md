@@ -33,6 +33,7 @@ chatpypi
 
 当前真正已落地的主路径：
 
+- `chatpypi --version`：输出当前包版本
 - `pkg`：包初始化、构建、校验、上传、名字探测
 - `auth whoami`
 - `auth session show`

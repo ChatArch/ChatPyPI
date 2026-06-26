@@ -691,6 +691,8 @@ def _build_chatarch_cli_py(module_name: str) -> str:
             \"\"\"CLI entrypoint for {module_name}.\"\"\"
 
             import click
+
+            from {module_name} import __version__
             from chatstyle import (
                 CommandField,
                 CommandSchema,
@@ -707,6 +709,7 @@ def _build_chatarch_cli_py(module_name: str) -> str:
 
 
             @click.group()
+            @click.version_option(__version__, prog_name="{module_name}")
             def main() -> None:
                 \"\"\"{module_name} command line interface.\"\"\"
 
@@ -740,7 +743,15 @@ def _build_chatarch_test_cli_py(module_name: str) -> str:
             f"""
             from click.testing import CliRunner
 
+            from {module_name} import __version__
             from {module_name}.cli import main
+
+
+            def test_version_option_reports_package_version():
+                result = CliRunner().invoke(main, ["--version"])
+
+                assert result.exit_code == 0
+                assert f"{module_name}, version {{__version__}}" in result.output
 
 
             def test_hello_command_accepts_explicit_name():
@@ -1835,7 +1846,24 @@ def upload_distributions(
             "artifact_count": len(files),
         },
     )
-    result = _ensure_success(runner(args, project_dir, env=env), "Twine upload")
+    if env is None:
+        result = runner(args, project_dir)
+    else:
+        result = runner(args, project_dir, env=env)
+    secrets = [value for value in (env or {}).values() if value]
+    if secrets:
+        stdout = result.stdout
+        stderr = result.stderr
+        for secret in secrets:
+            stdout = stdout.replace(secret, "[REDACTED]")
+            stderr = stderr.replace(secret, "[REDACTED]")
+        result = CommandResult(
+            args=result.args,
+            returncode=result.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    result = _ensure_success(result, "Twine upload")
     logger.info(
         "Uploaded package distributions",
         extra={

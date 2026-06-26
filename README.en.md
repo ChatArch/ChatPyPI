@@ -24,6 +24,7 @@ ChatPyPI: ChatArch Python package lifecycle helper extracted from ChatTool.
 ```bash
 pip install -e ".[dev]"
 chatpypi --help
+chatpypi --version
 chatpypi pkg init demo-pkg
 python -m pytest -q
 python -m build
