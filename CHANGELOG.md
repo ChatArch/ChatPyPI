@@ -32,6 +32,12 @@
 
 ### Added
 
+- Introduce the first public grouped CLI tree: `auth`, `profile`, `config`, `pkg`, `project`, `publisher`, `token`, `doctor`, and `docs`, while keeping legacy root aliases for `init/build/check/upload/probe`.
+- Add `chatpypi auth session show|clear` and `chatpypi auth whoami` as the first local-session inspection helpers.
+- Add `chatpypi pkg upload --token-env ...` / `--password-env ...` for manual token-backed uploads without exposing secrets on the command line.
+
 ### Changed
+
+- Update README and docs index pages to reflect the merged CLI tree and manual token upload path.
 
 ### Fixed

@@ -1,11 +1,11 @@
 # test_chatpypi_basic
 
-测试 `chatpypi` 的基础 CLI 链路，覆盖 init、build 与 check。
+测试 `chatpypi` 的基础 CLI 链路，覆盖 legacy root aliases、`pkg` 命名空间与手动 token 上传入口。
 
 ## 元信息
 
 - 命令：`chatpypi <command> [args]`
-- 目的：验证 PyPI 工具板块已接入主 CLI，并具备最小可用的建包与产物校验能力。
+- 目的：验证 PyPI 工具板块已接入主 CLI，并具备最小可用的建包、产物校验与 token 上传入口能力。
 - 标签：`cli`、`e2e`
 - 前置条件：本地可执行 Python，临时目录可写。
 - 环境准备：创建一个最小 Python 包目录，包含 `pyproject.toml`、`README.md`、`LICENSE`。
@@ -82,6 +82,26 @@ chatpypi check --project-dir /tmp/mychat
 ```sh
 cd /tmp/mychat
 python -m pytest -q
+```
+
+## 用例 4：`pkg upload` 支持手动 token 发布入口
+
+- 初始环境准备：
+  - 已完成最小项目构建。
+  - 本地环境变量中有 `PYPI_API_TOKEN`。
+- 相关文件：
+  - `<tmp>/mychat/dist/*`
+
+预期过程和结果：
+  1. 执行 `chatpypi pkg upload --project-dir <tmp>/mychat --token-env PYPI_API_TOKEN`。
+  2. 预期 CLI 把上传动作路由到 `twine upload`。
+  3. 预期 CLI 使用 `__token__` 作为用户名，并通过环境变量把 token 传给 `TWINE_PASSWORD`，而不是把秘密直接拼到命令行里。
+
+参考执行脚本（伪代码）：
+
+```sh
+export PYPI_API_TOKEN=...
+chatpypi pkg upload --project-dir /tmp/mychat --token-env PYPI_API_TOKEN
 ```
 
 ## 清理 / 回滚

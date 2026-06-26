@@ -23,9 +23,41 @@ ChatPyPI: ChatArch Python package lifecycle helper extracted from ChatTool.
 
 ```bash
 pip install -e ".[dev]"
-chatpypi hello ChatArch
+chatpypi --help
+chatpypi pkg init demo-pkg
 python -m pytest -q
 python -m build
+```
+
+## Current CLI Tree
+
+`ChatPyPI` is growing from a package lifecycle helper into a combined
+"package + post-registration PyPI operations" CLI. The current public tree now
+reserves:
+
+- `chatpypi pkg`
+- `chatpypi auth`
+- `chatpypi profile`
+- `chatpypi config`
+- `chatpypi project`
+- `chatpypi publisher`
+- `chatpypi token`
+- `chatpypi doctor`
+- `chatpypi docs`
+
+Legacy shortcuts remain available:
+
+- `chatpypi init`
+- `chatpypi build`
+- `chatpypi check`
+- `chatpypi upload`
+- `chatpypi probe`
+
+For manual token-based uploads, the current recommended command is:
+
+```bash
+export PYPI_API_TOKEN=...
+chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
 
 ## CLI Contract

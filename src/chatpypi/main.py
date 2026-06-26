@@ -1803,6 +1803,10 @@ def upload_distributions(
     dist_dir: Path | None = None,
     *,
     skip_existing: bool = False,
+    repository: str = "pypi",
+    repository_url: str | None = None,
+    username: str | None = None,
+    env: dict[str, str] | None = None,
     runner=run_command,
 ) -> tuple[CommandResult, list[Path]]:
     project_dir = Path(project_dir)
@@ -1816,6 +1820,12 @@ def upload_distributions(
     args = [sys.executable, "-m", "twine", "upload"]
     if skip_existing:
         args.append("--skip-existing")
+    if repository_url:
+        args.extend(["--repository-url", repository_url])
+    elif repository != "pypi":
+        args.extend(["--repository", repository])
+    if username:
+        args.extend(["--username", username])
     args.extend(str(path) for path in files)
     logger.info(
         "Uploading package distributions",
@@ -1825,7 +1835,7 @@ def upload_distributions(
             "artifact_count": len(files),
         },
     )
-    result = _ensure_success(runner(args, project_dir), "Twine upload")
+    result = _ensure_success(runner(args, project_dir, env=env), "Twine upload")
     logger.info(
         "Uploaded package distributions",
         extra={

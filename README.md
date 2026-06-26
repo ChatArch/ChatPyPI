@@ -23,9 +23,35 @@ ChatPyPI: ChatArch Python package lifecycle helper extracted from ChatTool.
 
 ```bash
 pip install -e ".[dev]"
-chatpypi hello ChatArch
+chatpypi --help
+chatpypi pkg init demo-pkg
 python -m pytest -q
 python -m build
+```
+
+## 当前 CLI 树
+
+`ChatPyPI` 正在从单纯的包生命周期工具，扩展为“包 + 登录后 PyPI 操作”工具。当前公共树结构已经预留：
+
+- `chatpypi pkg`：包初始化、构建、检查、上传、探测
+- `chatpypi auth`：登录、登出、session、初始化动作入口
+- `chatpypi profile` / `chatpypi config`：本地配置与 profile
+- `chatpypi project` / `chatpypi publisher` / `chatpypi token`：登录后管理对象
+- `chatpypi doctor` / `chatpypi docs`：自检与文档入口
+
+旧命令仍兼容：
+
+- `chatpypi init`
+- `chatpypi build`
+- `chatpypi check`
+- `chatpypi upload`
+- `chatpypi probe`
+
+手动 token 发布当前可直接走：
+
+```bash
+export PYPI_API_TOKEN=...
+chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
 
 ## CLI 规范

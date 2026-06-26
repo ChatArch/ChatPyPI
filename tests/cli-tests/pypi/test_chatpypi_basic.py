@@ -13,6 +13,7 @@ pytestmark = [pytest.mark.e2e]
 
 
 def _write_minimal_project(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
     (root / "pyproject.toml").write_text(
         """
 [build-system]
@@ -74,12 +75,19 @@ def _write_fake_twine_module(fake_site: Path) -> None:
     (twine_pkg / "__init__.py").write_text("", encoding="utf-8")
     (twine_pkg / "__main__.py").write_text(
         """
+import os
 import sys
 
 
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "check":
         print("fake check ok")
+        return 0
+    if len(sys.argv) > 1 and sys.argv[1] == "upload":
+        print("fake upload ok")
+        print("args=" + " ".join(sys.argv[1:]))
+        print("username=" + os.environ.get("TWINE_USERNAME", ""))
+        print("password=" + os.environ.get("TWINE_PASSWORD", ""))
         return 0
     raise SystemExit(2)
 
@@ -142,6 +150,47 @@ def test_chatpypi_basic(tmp_path):
     assert check.exit_code == 0
     assert "fake check ok" in check.output
     assert "Checked distributions:" in check.output
+
+
+def test_chatpypi_pkg_upload_uses_token_env(tmp_path):
+    runner = CliRunner()
+    project_dir = tmp_path / "demo-pkg"
+    fake_site = tmp_path / "fake-site"
+
+    _write_minimal_project(project_dir)
+    _write_fake_build_module(fake_site)
+    _write_fake_twine_module(fake_site)
+
+    build = runner.invoke(
+        cli,
+        ["pkg", "build", "--project-dir", str(project_dir)],
+        env={"PYTHONPATH": _pythonpath_with_fake_site(fake_site)},
+    )
+    assert build.exit_code == 0
+
+    upload = runner.invoke(
+        cli,
+        [
+            "pkg",
+            "upload",
+            "--project-dir",
+            str(project_dir),
+            "--repository",
+            "testpypi",
+            "--token-env",
+            "PYPI_API_TOKEN",
+        ],
+        env={
+            "PYTHONPATH": _pythonpath_with_fake_site(fake_site),
+            "PYPI_API_TOKEN": "demo-token-value",
+        },
+    )
+
+    assert upload.exit_code == 0
+    assert "fake upload ok" in upload.output
+    assert "--repository testpypi" in upload.output
+    assert "--username __token__" in upload.output
+    assert "password=demo-token-value" in upload.output
 
 
 def test_chatpypi_init_chatarch_template(tmp_path):
