@@ -1850,7 +1850,12 @@ def upload_distributions(
         result = runner(args, project_dir)
     else:
         result = runner(args, project_dir, env=env)
-    secrets = [value for value in (env or {}).values() if value]
+    secrets = [
+        (env or {}).get("TWINE_PASSWORD", ""),
+        (env or {}).get("PYPI_API_TOKEN", ""),
+        (env or {}).get("PYPI_TOKEN", ""),
+    ]
+    secrets = [value for value in secrets if value]
     if secrets:
         stdout = result.stdout
         stderr = result.stderr
