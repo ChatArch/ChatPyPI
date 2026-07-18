@@ -39,6 +39,7 @@ from chatstyle import (
 )
 
 from chatpypi.main import (
+    DEFAULT_CHATARCH_DOCS_DOMAIN,
     PyPICommandError,
     _ensure_empty_or_missing,
     build_package,
@@ -378,6 +379,17 @@ def _echo_json(payload: dict[str, object]) -> None:
     help="Create mkdocs files for chatarch template. Defaults to on for chatarch.",
 )
 @click.option(
+    "--docs-domain",
+    default=None,
+    help=f"Docs Pages domain for generated mkdocs files. Defaults to {DEFAULT_CHATARCH_DOCS_DOMAIN} for chatarch.",
+)
+@click.option(
+    "--with-docs-cname/--without-docs-cname",
+    "include_docs_cname",
+    default=None,
+    help="Create docs/CNAME for the configured docs domain. Defaults to on when mkdocs files are created.",
+)
+@click.option(
     "--with-workflows/--without-workflows",
     "include_workflows",
     default=None,
@@ -412,6 +424,8 @@ def init(
     email: str | None,
     project_dir: Path | None,
     include_mkdocs: bool | None,
+    docs_domain: str | None,
+    include_docs_cname: bool | None,
     include_workflows: bool | None,
     include_chatenv_provider: bool | None,
     chatenv_provider_name: str | None,
@@ -487,6 +501,18 @@ def init(
             )
         elif include_mkdocs is None:
             include_mkdocs = False
+        if include_mkdocs and docs_domain is None:
+            docs_domain = ask_text(
+                "docs_domain",
+                default=DEFAULT_CHATARCH_DOCS_DOMAIN,
+            )
+        if include_mkdocs and include_docs_cname is None:
+            include_docs_cname = ask_confirm(
+                "Create docs/CNAME for the docs domain?",
+                default=True,
+            )
+        elif include_docs_cname is None:
+            include_docs_cname = False
         if include_workflows is None and template == "chatarch":
             include_workflows = ask_confirm(
                 "Create GitHub workflow files?",
@@ -552,6 +578,8 @@ def init(
             include_workflows=include_workflows,
             include_chatenv_provider=include_chatenv_provider,
             chatenv_provider_name=chatenv_provider_name,
+            docs_domain=docs_domain,
+            include_docs_cname=include_docs_cname,
         )
     except PyPICommandError as exc:
         _raise_click_error(exc)
@@ -1446,7 +1474,7 @@ _planned_group_leaf(token, "revoke", "Planned to revoke a PyPI API token with co
 @docs.command(name="links")
 def docs_links():
     """Show the most relevant documentation entry points."""
-    click.echo("ChatPyPI docs: https://ChatArch.github.io/ChatPyPI")
+    click.echo("ChatPyPI docs: https://arch.gh.wzhecnu.cn/ChatPyPI/")
     click.echo("PyPI user docs: https://docs.pypi.org/")
     click.echo("Trusted publishing guide: https://docs.pypi.org/trusted-publishers/")
 
@@ -1468,7 +1496,7 @@ def docs_examples():
 def docs_open(topic: str | None):
     """Print a documentation URL for a known topic."""
     routes = {
-        None: "https://ChatArch.github.io/ChatPyPI",
+        None: "https://arch.gh.wzhecnu.cn/ChatPyPI/",
         "pypi": "https://docs.pypi.org/",
         "trusted-publishing": "https://docs.pypi.org/trusted-publishers/",
         "api-tokens": "https://docs.pypi.org/api/tokens/",

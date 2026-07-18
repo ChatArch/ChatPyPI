@@ -515,6 +515,10 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / "tests" / "test_cli.py").exists()
     assert (project_dir / "docs" / "index.md").exists()
     assert (project_dir / "docs" / "index.en.md").exists()
+    assert (project_dir / "docs" / "cli-tree.md").exists()
+    assert (project_dir / "docs" / "interface-tree.md").exists()
+    assert (project_dir / "docs" / "development-plan.md").exists()
+    assert (project_dir / "docs" / "CNAME").exists()
     assert (project_dir / "README.en.md").exists()
     assert (project_dir / "mkdocs.yml").exists()
     assert (project_dir / "tests" / "cli-tests" / "README.md").exists()
@@ -530,16 +534,31 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert 'requires-python = ">=3.10"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
-    assert 'docs = ["mkdocs' in pyproject_text
+    assert 'docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mkdocs-static-i18n>=1.2.0", "mike>=2.0.0"]' in pyproject_text
     assert 'Homepage = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
     assert 'Repository = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
-    assert 'Documentation = "https://ChatArch.github.io/mychat-cli"' in pyproject_text
+    assert 'Documentation = "https://arch.gh.wzhecnu.cn/mychat-cli/"' in pyproject_text
     workflow_texts = [
         path.read_text(encoding="utf-8")
         for path in sorted((project_dir / ".github" / "workflows").iterdir())
     ]
     assert all('python-version: "3.10"' in text for text in workflow_texts)
     assert all("3.11" not in text for text in workflow_texts)
+    preview_text = (project_dir / ".github" / "workflows" / "preview.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "https://arch.gh.wzhecnu.cn/${repo}/dev/" in preview_text
+    assert "https://arch.gh.wzhecnu.cn/${repo.repo}/dev/" in preview_text
+    assert "github.io" not in preview_text
+    mkdocs_text = (project_dir / "mkdocs.yml").read_text(encoding="utf-8")
+    assert "- i18n:" in mkdocs_text
+    assert "docs_structure: suffix" in mkdocs_text
+    assert "fallback_to_default: true" in mkdocs_text
+    assert "navigation.tabs" in mkdocs_text
+    assert "link: /mychat-cli/en/" in mkdocs_text
+    assert (project_dir / "docs" / "CNAME").read_text(encoding="utf-8") == "arch.gh.wzhecnu.cn\n"
+    assert "未实现" in (project_dir / "docs" / "cli-tree.md").read_text(encoding="utf-8")
+    assert "可 import 的 Python API" in (project_dir / "docs" / "development-plan.md").read_text(encoding="utf-8")
     publish_text = (project_dir / ".github" / "workflows" / "publish.yml").read_text(
         encoding="utf-8"
     )
@@ -581,7 +600,7 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "img.shields.io/pypi/v/mychat-cli.svg" in readme_text
     assert "https://github.com/ChatArch/mychat-cli/actions/workflows/ci.yml" in readme_text
     assert "actions/workflows/ci.yml/badge.svg" in readme_text
-    assert "https://ChatArch.github.io/mychat-cli" in readme_text
+    assert "https://arch.gh.wzhecnu.cn/mychat-cli/" in readme_text
     assert "OWNER/REPO" not in readme_text
     assert "docs-mkdocs" in readme_text
     assert "mychat_cli --help" in readme_text
@@ -596,6 +615,41 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert '_storage_dir = "MychatCli"' in config_text
     assert "def test(cls) -> None:" in config_text
     assert "Schema loaded; no network test is required." in config_text
+
+
+def test_chatpypi_init_chatarch_template_accepts_custom_docs_domain(tmp_path):
+    runner = CliRunner()
+    project_dir = tmp_path / "mychat-cli"
+
+    result = runner.invoke(
+        cli,
+        [
+            "init",
+            "mychat-cli",
+            "-t",
+            "chatarch",
+            "--project-dir",
+            str(project_dir),
+            "--docs-domain",
+            "docs.example.com",
+            "--without-docs-cname",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert not (project_dir / "docs" / "CNAME").exists()
+    assert 'Documentation = "https://docs.example.com/mychat-cli/"' in (
+        project_dir / "pyproject.toml"
+    ).read_text(encoding="utf-8")
+    assert "https://docs.example.com/mychat-cli/" in (project_dir / "README.md").read_text(
+        encoding="utf-8"
+    )
+    assert "site_url: https://docs.example.com/mychat-cli/" in (
+        project_dir / "mkdocs.yml"
+    ).read_text(encoding="utf-8")
+    assert "https://docs.example.com/${repo}/dev/" in (
+        project_dir / ".github" / "workflows" / "preview.yaml"
+    ).read_text(encoding="utf-8")
 
 
 def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
@@ -628,7 +682,7 @@ def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
     assert 'docs = ["mkdocs' not in pyproject_text
     assert 'Homepage = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
-    assert 'Documentation = "https://ChatArch.github.io/mychat-cli"' not in pyproject_text
+    assert 'Documentation = "https://arch.gh.wzhecnu.cn/mychat-cli/"' not in pyproject_text
     readme_text = (project_dir / "README.md").read_text(encoding="utf-8")
     assert "docs-mkdocs" not in readme_text
     assert "actions/workflows/ci.yml" not in readme_text

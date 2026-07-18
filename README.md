@@ -5,7 +5,7 @@
     <a href="https://github.com/ChatArch/ChatPyPI/actions/workflows/ci.yml">
         <img src="https://github.com/ChatArch/ChatPyPI/actions/workflows/ci.yml/badge.svg" alt="Tests" />
     </a>
-    <a href="https://ChatArch.github.io/ChatPyPI">
+    <a href="https://arch.gh.wzhecnu.cn/ChatPyPI/">
         <img src="https://img.shields.io/badge/docs-mkdocs-blue.svg" alt="Documentation" />
     </a>
 </div>
