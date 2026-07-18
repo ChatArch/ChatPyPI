@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.4 - 2026-07-18
+
+### Added
+
+- Add MkDocs Material + static i18n docs scaffolding to the ChatArch package template.
+- Generate ChatArch Pages URLs, Preview Docs links, and optional `docs/CNAME` from a configurable docs domain.
+- Add starter docs pages for scenario index, CLI capability map, Python interface tree, and development plan.
+
+### Changed
+
+- Move ChatPyPI's own documentation and README docs links to the ChatArch Pages domain.
+
 ## 0.2.3 - 2026-06-27
 
 ### Added

@@ -28,9 +28,8 @@ jobs:
       - run: |
           git fetch origin
           mike deploy dev -p --allow-empty
-          owner="${GITHUB_REPOSITORY_OWNER}"
           repo="${GITHUB_REPOSITORY#*/}"
-          preview_url="https://${owner}.github.io/${repo}/dev/"
+          preview_url="https://arch.gh.wzhecnu.cn/${repo}/dev/"
           echo "Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment PR with Preview Link
@@ -38,7 +37,7 @@ jobs:
         with:
           script: |
             const { payload, repo } = context;
-            const previewLink = `https://${repo.owner}.github.io/${repo.repo}/dev/`;
+            const previewLink = `https://arch.gh.wzhecnu.cn/${repo.repo}/dev/`;
             const comments = await github.rest.issues.listComments({
               owner: repo.owner,
               repo: repo.repo,

@@ -20,7 +20,7 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/ChatArch/ChatPyPI"
 Repository = "https://github.com/ChatArch/ChatPyPI"
-Documentation = "https://ChatArch.github.io/ChatPyPI"
+Documentation = "https://arch.gh.wzhecnu.cn/ChatPyPI/"
 
 [project.scripts]
 chatpypi = "chatpypi.cli:main"
@@ -30,7 +30,7 @@ pypi = "chatpypi.config"
 
 [project.optional-dependencies]
 dev = ["build", "pytest", "twine"]
-docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mike>=2.0.0"]
+docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mkdocs-static-i18n>=1.2.0", "mike>=2.0.0"]
 
 [tool.setuptools.dynamic]
 version = {attr = "chatpypi.__version__"}

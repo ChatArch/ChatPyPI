@@ -66,6 +66,7 @@ def test_chatpypi_init_chatarch_template_interactive(
         "author": "",
         "email": "",
         "template": "chatarch",
+        "docs_domain": "arch.gh.wzhecnu.cn",
     }
     monkeypatch.setattr(
         "chatstyle.core.interactive.is_interactive_available", lambda: True

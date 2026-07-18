@@ -1,9 +1,65 @@
 site_name: ChatPyPI 文档
-site_url: https://ChatArch.github.io/ChatPyPI
+site_url: https://arch.gh.wzhecnu.cn/ChatPyPI/
 repo_url: https://github.com/ChatArch/ChatPyPI
+repo_name: ChatArch/ChatPyPI
+edit_uri: edit/main/docs/
+docs_dir: docs/
 theme:
   name: material
   language: zh
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.action.edit
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: zh
+          default: true
+          name: 中文
+          build: true
+          site_name: ChatPyPI 文档
+        - locale: en
+          name: English
+          build: true
+          site_name: ChatPyPI Documentation
+          nav_translations:
+            首页: Home
+            模板创建: Template Creation
+            ChatArch 模板与 Docs Flow: ChatArch Template and Docs Flow
+            PyPI 发布: PyPI Publishing
+            发布与 Trusted Publisher Flow: Publishing and Trusted Publisher Flow
+            CLI / API: CLI / API
+            CLI 能力地图: CLI Capability Map
+            Python 接口树: Python Interface Tree
+            路线图: Roadmap
+            开发计划: Development Plan
+extra:
+  alternate:
+    - name: 中文
+      link: /ChatPyPI/
+      lang: zh
+    - name: English
+      link: /ChatPyPI/en/
+      lang: en
 nav:
   - 首页: index.md
-  - English: index.en.md
+  - 模板创建:
+      - ChatArch 模板与 Docs Flow: template-flow.md
+  - PyPI 发布:
+      - 发布与 Trusted Publisher Flow: pypi-flow.md
+  - CLI / API:
+      - CLI 能力地图: cli-tree.md
+      - Python 接口树: interface-tree.md
+  - 路线图:
+      - 开发计划: development-plan.md

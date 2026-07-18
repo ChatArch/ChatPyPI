@@ -22,6 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 DEFAULT_DIST_DIRNAME = "dist"
+DEFAULT_CHATARCH_DOCS_DOMAIN = "arch.gh.wzhecnu.cn"
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -354,9 +355,10 @@ def _build_chatarch_pyproject_content(
     email: str | None,
     include_mkdocs: bool = True,
     chatenv_provider_name: str | None = None,
+    docs_domain: str | None = None,
 ) -> str:
     repo_slug = _chatarch_repo_slug(package_name)
-    docs_url = _chatarch_docs_url(package_name)
+    docs_url = _chatarch_docs_url(package_name, docs_domain)
     lines = [
         "[build-system]",
         'requires = ["setuptools>=61.0", "wheel"]',
@@ -417,7 +419,7 @@ def _build_chatarch_pyproject_content(
         ]
     )
     if include_mkdocs:
-        lines.append('docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mike>=2.0.0"]')
+        lines.append('docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mkdocs-static-i18n>=1.2.0", "mike>=2.0.0"]')
     lines.extend(
         [
             "",
@@ -488,15 +490,33 @@ def _chatarch_repo_slug(package_name: str) -> str:
     return f"ChatArch/{package_name}"
 
 
-def _chatarch_docs_url(package_name: str) -> str:
-    return f"https://ChatArch.github.io/{package_name}"
+def _normalize_docs_domain(docs_domain: str | None) -> str:
+    value = (docs_domain or DEFAULT_CHATARCH_DOCS_DOMAIN).strip().rstrip("/")
+    if not value:
+        return DEFAULT_CHATARCH_DOCS_DOMAIN
+    if "://" in value:
+        parsed = urllib_parse.urlparse(value)
+        value = parsed.netloc or parsed.path
+    value = value.strip().strip("/")
+    if "/" in value:
+        raise PyPICommandError("docs_domain must be a domain name, not a URL path.")
+    return value
+
+
+def _chatarch_docs_url(package_name: str, docs_domain: str | None = None) -> str:
+    domain = _normalize_docs_domain(docs_domain)
+    return f"https://{domain}/{package_name}/"
 
 
 def _chatarch_badge_block(
-    package_name: str, *, include_mkdocs: bool, include_workflows: bool
+    package_name: str,
+    *,
+    include_mkdocs: bool,
+    include_workflows: bool,
+    docs_domain: str | None = None,
 ) -> str:
     repo_slug = _chatarch_repo_slug(package_name)
-    docs_url = _chatarch_docs_url(package_name)
+    docs_url = _chatarch_docs_url(package_name, docs_domain)
     lines = [
         '<div align="center">',
         f'    <a href="https://pypi.python.org/pypi/{package_name}">',
@@ -554,11 +574,13 @@ def _build_chatarch_readme(
     *,
     include_mkdocs: bool = True,
     include_workflows: bool = True,
+    docs_domain: str | None = None,
 ) -> str:
     badges = _chatarch_badge_block(
         package_name,
         include_mkdocs=include_mkdocs,
         include_workflows=include_workflows,
+        docs_domain=docs_domain,
     )
     layout = _chatarch_layout_lines(include_mkdocs=include_mkdocs)
     return f"""\
@@ -609,11 +631,13 @@ def _build_chatarch_readme_en(
     *,
     include_mkdocs: bool = True,
     include_workflows: bool = True,
+    docs_domain: str | None = None,
 ) -> str:
     badges = _chatarch_badge_block(
         package_name,
         include_mkdocs=include_mkdocs,
         include_workflows=include_workflows,
+        docs_domain=docs_domain,
     )
     layout = _chatarch_layout_lines_en(include_mkdocs=include_mkdocs)
     return f"""\
@@ -743,69 +767,252 @@ def _build_chatarch_test_cli_py(module_name: str) -> str:
     )
 
 
-def _build_chatarch_docs_index(package_name: str) -> str:
+def _build_chatarch_docs_index(package_name: str, docs_domain: str | None = None) -> str:
+    docs_url = _chatarch_docs_url(package_name, docs_domain)
     return (
         textwrap.dedent(
             f"""
             # {package_name} 文档
 
-            这里收纳 `{package_name}` 的长期维护文档。
+            {package_name} 是 ChatArch 系列 Python 包。这个文档站提供长期维护的使用说明、CLI/API 入口、能力地图和路线图。生成模板后，请把占位说明替换为当前包已经实现、探索过或计划中的真实内容。
+
+            站点入口：<{docs_url}>
+
+            ## 按场景选择文档
+
+            | 场景 | 文档 |
+            | --- | --- |
+            | 第一次安装、运行 CLI、确认包可用 | [CLI 能力地图](cli-tree.md) |
+            | 从 Python 代码调用包能力 | [Python 接口树](interface-tree.md) |
+            | 记录已实现、已验证、未实现能力边界 | [开发计划](development-plan.md) |
+
+            ## 文档状态约定
+
+            - **已实现**：代码、测试或 CLI 路径已经存在。
+            - **已验证**：已经通过本地 smoke、CI 或真实服务实践验证。
+            - **未实现**：只写规划和安全边界，不写成可执行教程；实现并验证后再升级为操作文档。
 
             ## 本地预览
 
             ```bash
-            pip install -e ".[docs]"
+            python -m pip install -e ".[docs]"
             mkdocs serve
             ```
 
-            英文版见：[index.en.md](index.en.md)。
+            英文首页见站点语言入口：<{docs_url}en/>。缺少英文翻译的专题页会按 i18n fallback 回退到中文页面。
             """
         ).strip()
         + "\n"
     )
 
 
-def _build_chatarch_docs_index_en(package_name: str) -> str:
+def _build_chatarch_docs_index_en(package_name: str, docs_domain: str | None = None) -> str:
+    docs_url = _chatarch_docs_url(package_name, docs_domain)
     return (
         textwrap.dedent(
             f"""
             # {package_name} Docs
 
-            Long-lived documentation for `{package_name}` lives here.
+            {package_name} is a ChatArch Python package. This documentation site should hold long-lived usage notes, CLI/API entry points, capability maps, and roadmap notes. After scaffolding, replace placeholders with behavior that is actually implemented, explored, or planned for this package.
+
+            ## Choose By Scenario
+
+            | Scenario | Document |
+            | --- | --- |
+            | Install the package, run the CLI, and confirm it works | [CLI Capability Map](cli-tree.md) |
+            | Call package behavior directly from Python | [Python Interface Tree](interface-tree.md) |
+            | Record implemented, verified, and planned capability boundaries | [Development Plan](development-plan.md) |
+
+            ## Documentation Status
+
+            - **Implemented**: code, tests, or CLI routes exist.
+            - **Verified**: covered by local smoke, CI, or real-service practice.
+            - **Not implemented**: keep as roadmap and safety notes only; turn into operation docs after implementation and validation.
 
             ## Local Preview
 
             ```bash
-            pip install -e ".[docs]"
+            python -m pip install -e ".[docs]"
             mkdocs serve
             ```
 
-            Chinese version: [index.md](index.md).
+            The Chinese home page is available at <{docs_url}>. Topic pages without English translations fall back to the default Chinese content through the i18n plugin.
             """
         ).strip()
         + "\n"
     )
 
 
-def _build_chatarch_mkdocs_yml(package_name: str) -> str:
+def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
+    return (
+        textwrap.dedent(
+            f"""
+            # CLI 能力地图
+
+            这个页面是 `{package_name}` 的 CLI 能力地图。生成后请按真实命令树更新；不要把未实现命令写成已可用操作。
+
+            ## 当前命令树
+
+            ```text
+            {module_name}
+            └── --help
+            ```
+
+            ## 状态约定
+
+            | 状态 | 含义 |
+            | --- | --- |
+            | 已实现 | 命令、函数和测试已经存在 |
+            | 已验证 | 已通过 CI、本地 smoke 或真实服务实践 |
+            | 未实现 | 只保留规划；实现前不要写操作教程 |
+
+            ## 更新清单
+
+            - 新增 CLI 命令时，同步写背后的 Python API。
+            - 新增 mutation 命令时，说明 dry-run / `--apply` / 权限边界。
+            - 新增真实实践后，把验证结果写到对应 Flow 或实践页。
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _build_chatarch_docs_interface_tree(package_name: str, module_name: str) -> str:
+    return (
+        textwrap.dedent(
+            f"""
+            # Python 接口树
+
+            `{package_name}` 的 CLI 应保持薄入口；实质能力应放在可 import 的 Python 函数、类或 service 层里。
+
+            ## 包入口
+
+            ```python
+            from {module_name} import __version__
+            ```
+
+            ## 待补接口
+
+            ```text
+            {module_name}
+            ├── cli.py          # Click 入口，只做参数解析和输出
+            └── <service>.py    # 放包的核心可调用能力
+            ```
+
+            ## 更新清单
+
+            - 每个实质 CLI 命令都要能映射到 importable API。
+            - 文档里的函数签名应和代码一致。
+            - 对外输出默认不要泄漏 token、cookie、内部 URL 或人员信息。
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _build_chatarch_docs_development_plan(package_name: str) -> str:
+    return (
+        textwrap.dedent(
+            f"""
+            # 开发计划
+
+            这个页面记录 `{package_name}` 的文档化路线。模板只提供结构；请按真实实现和验证进展更新。
+
+            ## Review Contract
+
+            - CLI 命令必须调用可 import 的 Python API。
+            - 文档先写已实现和已验证能力；未实现能力必须标记为未实现。
+            - 敏感信息不得进入 README、docs、issue、PR 评论或 CI log。
+            - 破坏性操作默认 dry-run，或要求显式 `--apply`。
+
+            ## Phase 1：当前已实现能力
+
+            ```text
+            待项目实现后补充。
+            ```
+
+            ## Phase 2：下一步计划
+
+            ```text
+            待项目确认后补充。
+            ```
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _build_chatarch_mkdocs_yml(package_name: str, docs_domain: str | None = None) -> str:
     repo_slug = _chatarch_repo_slug(package_name)
-    docs_url = _chatarch_docs_url(package_name)
+    docs_url = _chatarch_docs_url(package_name, docs_domain)
     return (
         textwrap.dedent(
             f"""
             site_name: {package_name} 文档
             site_url: {docs_url}
             repo_url: https://github.com/{repo_slug}
+            repo_name: {repo_slug}
+            edit_uri: edit/main/docs/
+            docs_dir: docs/
             theme:
               name: material
               language: zh
+              features:
+                - navigation.tabs
+                - navigation.sections
+                - navigation.expand
+                - navigation.top
+                - search.highlight
+                - search.share
+                - content.code.copy
+                - content.action.edit
+            plugins:
+              - search
+              - i18n:
+                  docs_structure: suffix
+                  fallback_to_default: true
+                  reconfigure_material: true
+                  reconfigure_search: true
+                  languages:
+                    - locale: zh
+                      default: true
+                      name: 中文
+                      build: true
+                      site_name: {package_name} 文档
+                    - locale: en
+                      name: English
+                      build: true
+                      site_name: {package_name} Documentation
+                      nav_translations:
+                        首页: Home
+                        CLI / API: CLI / API
+                        CLI 能力地图: CLI Capability Map
+                        Python 接口树: Python Interface Tree
+                        路线图: Roadmap
+                        开发计划: Development Plan
+            extra:
+              alternate:
+                - name: 中文
+                  link: /{package_name}/
+                  lang: zh
+                - name: English
+                  link: /{package_name}/en/
+                  lang: en
             nav:
               - 首页: index.md
-              - English: index.en.md
+              - CLI / API:
+                  - CLI 能力地图: cli-tree.md
+                  - Python 接口树: interface-tree.md
+              - 路线图:
+                  - 开发计划: development-plan.md
             """
         ).strip()
         + "\n"
     )
+
+
+def _build_docs_cname(docs_domain: str | None = None) -> str:
+    return f"{_normalize_docs_domain(docs_domain)}\n"
 
 
 def _build_chatarch_agends_md() -> str:
@@ -841,6 +1048,8 @@ def scaffold_package(
     include_workflows: bool | None = None,
     include_chatenv_provider: bool | None = None,
     chatenv_provider_name: str | None = None,
+    docs_domain: str | None = None,
+    include_docs_cname: bool | None = None,
 ) -> ScaffoldResult:
     package_name = package_name.strip()
     if not package_name:
@@ -853,6 +1062,9 @@ def scaffold_package(
         include_workflows = template == "chatarch"
     if include_chatenv_provider is None:
         include_chatenv_provider = template == "chatarch"
+    resolved_docs_domain = _normalize_docs_domain(docs_domain) if include_mkdocs else None
+    if include_docs_cname is None:
+        include_docs_cname = bool(include_mkdocs and resolved_docs_domain)
     if chatenv_provider_name and not include_chatenv_provider:
         raise PyPICommandError(
             "chatenv_provider_name requires include_chatenv_provider=True."
@@ -964,6 +1176,7 @@ def scaffold_package(
                     email=email,
                     include_mkdocs=include_mkdocs,
                     chatenv_provider_name=resolved_chatenv_provider_name,
+                    docs_domain=resolved_docs_domain,
                 ),
                 project_dir / "README.md": _build_chatarch_readme(
                     package_name,
@@ -971,6 +1184,7 @@ def scaffold_package(
                     description,
                     include_mkdocs=include_mkdocs,
                     include_workflows=include_workflows,
+                    docs_domain=resolved_docs_domain,
                 ),
                 project_dir / "README.en.md": _build_chatarch_readme_en(
                     package_name,
@@ -978,17 +1192,32 @@ def scaffold_package(
                     description,
                     include_mkdocs=include_mkdocs,
                     include_workflows=include_workflows,
+                    docs_domain=resolved_docs_domain,
                 ),
                 project_dir / "DEVELOP.md": _build_chatarch_develop_md(),
                 project_dir / "CHANGELOG.md": _build_chatarch_changelog(),
                 project_dir / "AGENTS.md": _build_chatarch_agends_md(),
                 project_dir / "mkdocs.yml": _build_chatarch_mkdocs_yml(
-                    package_name
+                    package_name,
+                    docs_domain=resolved_docs_domain,
                 ),
                 project_dir / "docs" / "index.md": _build_chatarch_docs_index(
-                    package_name
+                    package_name,
+                    docs_domain=resolved_docs_domain,
                 ),
                 project_dir / "docs" / "index.en.md": _build_chatarch_docs_index_en(
+                    package_name,
+                    docs_domain=resolved_docs_domain,
+                ),
+                project_dir / "docs" / "cli-tree.md": _build_chatarch_docs_cli_tree(
+                    package_name,
+                    module_name,
+                ),
+                project_dir / "docs" / "interface-tree.md": _build_chatarch_docs_interface_tree(
+                    package_name,
+                    module_name,
+                ),
+                project_dir / "docs" / "development-plan.md": _build_chatarch_docs_development_plan(
                     package_name
                 ),
                 tests_dir
@@ -1199,9 +1428,8 @@ def scaffold_package(
                           - run: |
                               git fetch origin
                               mike deploy dev -p --allow-empty
-                              owner="${GITHUB_REPOSITORY_OWNER}"
                               repo="${GITHUB_REPOSITORY#*/}"
-                              preview_url="https://${owner}.github.io/${repo}/dev/"
+                              preview_url="https://{docs_domain}/${repo}/dev/"
                               echo "Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
                           - name: Comment PR with Preview Link
@@ -1209,7 +1437,7 @@ def scaffold_package(
                             with:
                               script: |
                                 const { payload, repo } = context;
-                                const previewLink = `https://${repo.owner}.github.io/${repo.repo}/dev/`;
+                                const previewLink = `https://{docs_domain}/${repo.repo}/dev/`;
                                 const comments = await github.rest.issues.listComments({
                                   owner: repo.owner,
                                   repo: repo.repo,
@@ -1227,10 +1455,13 @@ def scaffold_package(
                     """
                 )
                 .replace("{workflow_python_version}", workflow_python_version)
+                .replace("{docs_domain}", resolved_docs_domain or DEFAULT_CHATARCH_DOCS_DOMAIN)
                 .strip()
                 + "\n",
             }
         )
+        if include_docs_cname and resolved_docs_domain:
+            file_map[project_dir / "docs" / "CNAME"] = _build_docs_cname(resolved_docs_domain)
         if resolved_chatenv_provider_name:
             file_map[src_dir / "config.py"] = _build_chatarch_chatenv_config_py(
                 package_name=package_name,
@@ -1242,6 +1473,10 @@ def scaffold_package(
                 project_dir / "mkdocs.yml",
                 project_dir / "docs" / "index.md",
                 project_dir / "docs" / "index.en.md",
+                project_dir / "docs" / "cli-tree.md",
+                project_dir / "docs" / "interface-tree.md",
+                project_dir / "docs" / "development-plan.md",
+                project_dir / "docs" / "CNAME",
                 project_dir / ".github" / "workflows" / "deploy.yaml",
                 project_dir / ".github" / "workflows" / "preview.yaml",
             ):
