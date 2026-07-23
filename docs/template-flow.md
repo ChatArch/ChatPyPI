@@ -14,8 +14,8 @@
 ├── docs/
 │   ├── index.md
 │   ├── index.en.md
-│   ├── commands.md
-│   ├── commands.en.md
+│   ├── cli-tree.md
+│   ├── cli-tree.en.md
 │   ├── capability-map.md
 │   ├── capability-map.en.md
 │   └── interface-tree.md
@@ -26,7 +26,7 @@
     └── publish.yml
 ```
 
-默认不生成 `docs/development-plan.md`、`docs/cli-tree.md` 或 `docs/CNAME`。
+默认不生成 `docs/development-plan.md`、`docs/commands.md` 或 `docs/CNAME`。
 
 ## 当前命令
 
@@ -39,7 +39,7 @@ chatpypi init my-package -t chatarch --project-dir ./my-package
 - 创建 MkDocs Material 配置。
 - 接入 `mkdocs-static-i18n` suffix 模式。
 - 中文默认站点，英文内容放在 `.en.md` 文件和语言切换入口里。
-- 生成首页导航、命令地图、能力地图和 Python 接口树。
+- 生成首页导航、CLI 树、能力地图和 Python 接口树。
 - 不默认创建 `docs/CNAME`；只有显式传 `--with-docs-cname` 才生成。
 - PR preview 使用 `mike deploy dev`。
 - preview comment 使用 ChatArch Pages 域名。
@@ -62,9 +62,9 @@ chatpypi init my-package -t chatarch \
 
 ## Review 要点
 
-- 模板文档可以是占位，但占位必须引导到正确结构：首页导航、命令地图、能力地图和接口树。
+- 模板文档可以是占位，但占位必须引导到正确结构：首页导航、CLI 树、能力地图和接口树。
 - 默认中文页面保持中文语境；英文内容只放在 `.en.md` 和语言切换入口里。
-- 命令地图回答“怎么调用”：真实命令树、命令状态、交互约定和更新清单。
+- CLI 树回答“怎么调用”：真实命令树、命令状态、交互约定和更新清单；它是最直观的命令展示入口。
 - 能力地图回答“包负责什么”：一等能力、验证状态、能力边界和不负责的范围。
 - 生成包的 `pyproject.toml` docs extra 必须包含 `mkdocs-static-i18n`。
 - `mkdocs.yml` 必须启用 `attr_list` 和 `md_in_html`，支持 Material grid cards。

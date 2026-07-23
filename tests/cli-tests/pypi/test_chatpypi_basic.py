@@ -515,12 +515,13 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / "tests" / "test_cli.py").exists()
     assert (project_dir / "docs" / "index.md").exists()
     assert (project_dir / "docs" / "index.en.md").exists()
-    assert (project_dir / "docs" / "commands.md").exists()
-    assert (project_dir / "docs" / "commands.en.md").exists()
+    assert (project_dir / "docs" / "cli-tree.md").exists()
+    assert (project_dir / "docs" / "cli-tree.en.md").exists()
     assert (project_dir / "docs" / "capability-map.md").exists()
     assert (project_dir / "docs" / "capability-map.en.md").exists()
     assert (project_dir / "docs" / "interface-tree.md").exists()
-    assert not (project_dir / "docs" / "cli-tree.md").exists()
+    assert not (project_dir / "docs" / "commands.md").exists()
+    assert not (project_dir / "docs" / "commands.en.md").exists()
     assert not (project_dir / "docs" / "development-plan.md").exists()
     assert not (project_dir / "docs" / "CNAME").exists()
     assert (project_dir / "README.en.md").exists()
@@ -563,15 +564,16 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "- md_in_html" in mkdocs_text
     assert "- 命令与接口:" in mkdocs_text
     assert "CLI / API" not in mkdocs_text
-    assert "命令地图: commands.md" in mkdocs_text
+    assert "CLI 树: cli-tree.md" in mkdocs_text
     assert "能力地图: capability-map.md" in mkdocs_text
     assert "link: /mychat-cli/en/" in mkdocs_text
     assert "路线图" not in mkdocs_text
     assert "development-plan" not in mkdocs_text
-    commands_text = (project_dir / "docs" / "commands.md").read_text(encoding="utf-8")
-    assert "# 命令地图" in commands_text
-    assert "grid cards" in commands_text
-    assert "`-- --help" in commands_text
+    cli_tree_text = (project_dir / "docs" / "cli-tree.md").read_text(encoding="utf-8")
+    assert "# CLI 树" in cli_tree_text
+    assert "最直观的命令展示入口" in cli_tree_text
+    assert "grid cards" in cli_tree_text
+    assert "`-- --help" in cli_tree_text
     capability_text = (project_dir / "docs" / "capability-map.md").read_text(encoding="utf-8")
     assert "# 能力地图" in capability_text
     assert "不生成计划类占位页" in capability_text
@@ -625,7 +627,7 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "mychat_cli --help" in readme_text
     assert "mychat_cli --version" in readme_text
     assert "按场景选择文档" in readme_text
-    assert "docs/commands.md" in readme_text
+    assert "docs/cli-tree.md" in readme_text
     assert "docs/capability-map.md" in readme_text
     assert "hello ChatArch" not in readme_text
     assert "CommandSchema" in readme_text

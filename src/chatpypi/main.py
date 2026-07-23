@@ -593,7 +593,7 @@ def _build_chatarch_readme(
 
 | 场景 | 文档 |
 | --- | --- |
-| 第一次安装、运行命令行、确认包可用 | [命令地图](docs/commands.md) |
+| 第一次安装、运行命令行、确认包可用 | [CLI 树](docs/cli-tree.md) |
 | 校对当前包有哪些一等能力和边界 | [能力地图](docs/capability-map.md) |
 | 从 Python 代码调用包能力 | [接口树](docs/interface-tree.md) |
 
@@ -665,7 +665,7 @@ Choose documentation by scenario:
 
 | Scenario | Document |
 | --- | --- |
-| Install the package, run the CLI, and confirm it works | `docs/commands.en.md` |
+| Install the package, run the CLI, and confirm it works | `docs/cli-tree.en.md` |
 | Check first-class capabilities and current boundaries | `docs/capability-map.en.md` |
 | Call package behavior directly from Python | `docs/interface-tree.md` |
 
@@ -804,7 +804,7 @@ def _build_chatarch_docs_index(package_name: str, docs_domain: str | None = None
             f"""
             # {package_name} 文档
 
-            {package_name} 是 ChatArch 系列 Python 包。这个文档站提供长期维护的使用说明、命令地图、能力地图和 Python 接口入口。生成模板后，请把占位说明替换为当前包已经实现、探索过或计划中的真实内容。
+            {package_name} 是 ChatArch 系列 Python 包。这个文档站提供长期维护的使用说明、CLI 树、能力地图和 Python 接口入口。生成模板后，请把占位说明替换为当前包已经实现、探索过或计划中的真实内容。
 
             站点入口：<{docs_url}>
 
@@ -812,7 +812,7 @@ def _build_chatarch_docs_index(package_name: str, docs_domain: str | None = None
 
             | 场景 | 文档 |
             | --- | --- |
-            | 第一次安装、运行命令行、确认包可用 | [命令地图](commands.md) |
+            | 第一次安装、运行命令行、确认包可用 | [CLI 树](cli-tree.md) |
             | 校对当前包有哪些一等能力和边界 | [能力地图](capability-map.md) |
             | 从 Python 代码调用包能力 | [Python 接口树](interface-tree.md) |
 
@@ -820,7 +820,7 @@ def _build_chatarch_docs_index(package_name: str, docs_domain: str | None = None
 
             当前模板只保留长期有用的文档入口，不生成计划类占位页：
 
-            - **命令地图**：真实 CLI 树、命令状态和更新清单。
+            - **CLI 树**：最直观的命令展示入口，包含真实命令树、状态和更新清单。
             - **能力地图**：当前一等能力、边界和不负责的范围。
             - **接口树**：命令行背后的可 import Python 接口。
 
@@ -828,11 +828,11 @@ def _build_chatarch_docs_index(package_name: str, docs_domain: str | None = None
 
             <div class="grid cards" markdown>
 
-            - **命令地图**
+            - **CLI 树**
 
                 从命令行入口开始，记录已实现命令、命令状态和交互约定。
 
-                [查看命令地图](commands.md)
+                [查看 CLI 树](cli-tree.md)
 
             - **能力地图**
 
@@ -883,7 +883,7 @@ def _build_chatarch_docs_index_en(package_name: str, docs_domain: str | None = N
 
             | Scenario | Document |
             | --- | --- |
-            | Install the package, run the CLI, and confirm it works | [Command Map](commands.md) |
+            | Install the package, run the CLI, and confirm it works | [CLI Tree](cli-tree.md) |
             | Check first-class capabilities and current boundaries | [Capability Map](capability-map.md) |
             | Call package behavior directly from Python | [Python Interface Tree](interface-tree.md) |
 
@@ -891,7 +891,7 @@ def _build_chatarch_docs_index_en(package_name: str, docs_domain: str | None = N
 
             This template keeps only durable documentation entry points; it does not generate a plan placeholder:
 
-            - **Command map**: real CLI tree, command status, and update checklist.
+            - **CLI tree**: the most direct command entry point, including the real command tree, status, and update checklist.
             - **Capability map**: first-class capabilities, boundaries, and out-of-scope areas.
             - **Interface tree**: importable Python APIs behind the CLI.
 
@@ -899,11 +899,11 @@ def _build_chatarch_docs_index_en(package_name: str, docs_domain: str | None = N
 
             <div class="grid cards" markdown>
 
-            - **Command Map**
+            - **CLI Tree**
 
                 Start from the CLI entry point and record implemented commands, command status, and interactive conventions.
 
-                [Open Command Map](commands.md)
+                [Open CLI Tree](cli-tree.md)
 
             - **Capability Map**
 
@@ -939,13 +939,13 @@ def _build_chatarch_docs_index_en(package_name: str, docs_domain: str | None = N
     )
 
 
-def _build_chatarch_docs_commands(package_name: str, module_name: str) -> str:
+def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
     return (
         textwrap.dedent(
             f"""
-            # 命令地图
+            # CLI 树
 
-            这个页面是 `{package_name}` 的命令地图。生成后请按真实命令树更新；不要把未实现命令写成已可用操作。
+            这个页面是 `{package_name}` 最直观的命令展示入口，也承担命令地图职责。生成后请按真实命令树更新；不要把未实现命令写成已可用操作。
 
             ## 当前命令树
 
@@ -991,13 +991,13 @@ def _build_chatarch_docs_commands(package_name: str, module_name: str) -> str:
     )
 
 
-def _build_chatarch_docs_commands_en(package_name: str, module_name: str) -> str:
+def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str:
     return (
         textwrap.dedent(
             f"""
-            # Command Map
+            # CLI Tree
 
-            This page is the command map for `{package_name}`. After scaffolding, update it with the real command tree; do not present unimplemented commands as available operations.
+            This page is the most direct command entry point for `{package_name}` and also serves as the command map. After scaffolding, update it with the real command tree; do not present unimplemented commands as available operations.
 
             ## Current Command Tree
 
@@ -1210,7 +1210,7 @@ def _build_chatarch_mkdocs_yml(package_name: str, docs_domain: str | None = None
                       nav_translations:
                         首页: Home
                         命令与接口: Commands and APIs
-                        命令地图: Command Map
+                        CLI 树: CLI Tree
                         能力地图: Capability Map
                         Python 接口树: Python Interface Tree
             markdown_extensions:
@@ -1234,7 +1234,7 @@ def _build_chatarch_mkdocs_yml(package_name: str, docs_domain: str | None = None
             nav:
               - 首页: index.md
               - 命令与接口:
-                  - 命令地图: commands.md
+                  - CLI 树: cli-tree.md
                   - 能力地图: capability-map.md
                   - Python 接口树: interface-tree.md
             """
@@ -1441,11 +1441,11 @@ def scaffold_package(
                     package_name,
                     docs_domain=resolved_docs_domain,
                 ),
-                project_dir / "docs" / "commands.md": _build_chatarch_docs_commands(
+                project_dir / "docs" / "cli-tree.md": _build_chatarch_docs_cli_tree(
                     package_name,
                     module_name,
                 ),
-                project_dir / "docs" / "commands.en.md": _build_chatarch_docs_commands_en(
+                project_dir / "docs" / "cli-tree.en.md": _build_chatarch_docs_cli_tree_en(
                     package_name,
                     module_name,
                 ),
@@ -1714,8 +1714,8 @@ def scaffold_package(
                 project_dir / "mkdocs.yml",
                 project_dir / "docs" / "index.md",
                 project_dir / "docs" / "index.en.md",
-                project_dir / "docs" / "commands.md",
-                project_dir / "docs" / "commands.en.md",
+                project_dir / "docs" / "cli-tree.md",
+                project_dir / "docs" / "cli-tree.en.md",
                 project_dir / "docs" / "capability-map.md",
                 project_dir / "docs" / "capability-map.en.md",
                 project_dir / "docs" / "interface-tree.md",
