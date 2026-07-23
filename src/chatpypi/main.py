@@ -583,36 +583,51 @@ def _build_chatarch_readme(
         docs_domain=docs_domain,
     )
     layout = _chatarch_layout_lines(include_mkdocs=include_mkdocs)
+    docs_url = _chatarch_docs_url(package_name, docs_domain)
+    docs_section = ""
+    if include_mkdocs:
+        docs_section = f"""
+文档入口：<{docs_url}>
+
+按场景选择文档：
+
+| 场景 | 文档 |
+| --- | --- |
+| 第一次安装、运行命令行、确认包可用 | [CLI 树](docs/cli-tree.md) |
+| 校对当前包有哪些一等能力和边界 | [能力地图](docs/capability-map.md) |
+| 从 Python 代码调用包能力 | [接口树](docs/interface-tree.md) |
+
+"""
     return f"""\
 {badges}
 
 <div align="center">
 
-[English](README.en.md) | [简体中文](README.md)
+[英文版](README.en.md) | [简体中文](README.md)
 </div>
 
 # {package_name}
 
 {description}
 
-## 快速开始
+{docs_section}## 快速开始
 
 ```bash
-pip install -e ".[dev]"
+pip install -e \".[dev]"
 {module_name} --help
 {module_name} --version
 python -m pytest -q
 python -m build
 ```
 
-## CLI 规范
+## 命令行规范
 
-这个模板默认依赖 `chatstyle>=0.1.0,<0.2.0` 和 `chatenv>=0.2.0,<0.3.0`，新的命令应优先使用：
+这个模板默认依赖 `chatstyle>=0.1.0,<0.2.0` 和 `chatenv>=0.2.0,<0.3.0`，新增命令应优先使用：
 
 - `CommandSchema` / `CommandField` 描述输入。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
-- 默认生成 `config.py` 和 `chatenv.configs` entry point，使包可被 ChatEnv 发现；只有明确不需要 ChatEnv 接入时才使用 `--without-chatenv-provider`。
+- 默认生成 `config.py` 和 `chatenv.configs` 入口点，使包可被 ChatEnv 发现；只有明确不需要 ChatEnv 接入时才使用 `--without-chatenv-provider`。
 
 ## 目录结构
 
@@ -640,6 +655,21 @@ def _build_chatarch_readme_en(
         docs_domain=docs_domain,
     )
     layout = _chatarch_layout_lines_en(include_mkdocs=include_mkdocs)
+    docs_url = _chatarch_docs_url(package_name, docs_domain)
+    docs_section = ""
+    if include_mkdocs:
+        docs_section = f"""
+Documentation entry: <{docs_url}en/>
+
+Choose documentation by scenario:
+
+| Scenario | Document |
+| --- | --- |
+| Install the package, run the CLI, and confirm it works | `docs/cli-tree.en.md` |
+| Check first-class capabilities and current boundaries | `docs/capability-map.en.md` |
+| Call package behavior directly from Python | `docs/interface-tree.md` |
+
+"""
     return f"""\
 {badges}
 
@@ -652,10 +682,10 @@ def _build_chatarch_readme_en(
 
 {description}
 
-## Quick Start
+{docs_section}## Quick Start
 
 ```bash
-pip install -e ".[dev]"
+pip install -e \".[dev]"
 {module_name} --help
 {module_name} --version
 python -m pytest -q
@@ -774,7 +804,7 @@ def _build_chatarch_docs_index(package_name: str, docs_domain: str | None = None
             f"""
             # {package_name} 文档
 
-            {package_name} 是 ChatArch 系列 Python 包。这个文档站提供长期维护的使用说明、CLI/API 入口、能力地图和路线图。生成模板后，请把占位说明替换为当前包已经实现、探索过或计划中的真实内容。
+            {package_name} 是 ChatArch 系列 Python 包。这个文档站提供长期维护的使用说明、CLI 树、能力地图和 Python 接口入口。生成模板后，请把占位说明替换为当前包已经实现、探索过或计划中的真实内容。
 
             站点入口：<{docs_url}>
 
@@ -782,15 +812,47 @@ def _build_chatarch_docs_index(package_name: str, docs_domain: str | None = None
 
             | 场景 | 文档 |
             | --- | --- |
-            | 第一次安装、运行 CLI、确认包可用 | [CLI 能力地图](cli-tree.md) |
+            | 第一次安装、运行命令行、确认包可用 | [CLI 树](cli-tree.md) |
+            | 校对当前包有哪些一等能力和边界 | [能力地图](capability-map.md) |
             | 从 Python 代码调用包能力 | [Python 接口树](interface-tree.md) |
-            | 记录已实现、已验证、未实现能力边界 | [开发计划](development-plan.md) |
+
+            ## 文档栏目组织
+
+            当前模板只保留长期有用的文档入口，不生成计划类占位页：
+
+            - **CLI 树**：最直观的命令展示入口，包含真实命令树、状态和更新清单。
+            - **能力地图**：当前一等能力、边界和不负责的范围。
+            - **接口树**：命令行背后的可 import Python 接口。
+
+            ## 核心入口
+
+            <div class="grid cards" markdown>
+
+            - **CLI 树**
+
+                从命令行入口开始，记录已实现命令、命令状态和交互约定。
+
+                [查看 CLI 树](cli-tree.md)
+
+            - **能力地图**
+
+                用于 review 当前包的能力边界，避免把规划写成已实现功能。
+
+                [查看能力地图](capability-map.md)
+
+            - **Python 接口树**
+
+                保持命令行是薄入口，实质能力放在可 import 的 Python 接口中。
+
+                [查看接口树](interface-tree.md)
+
+            </div>
 
             ## 文档状态约定
 
             - **已实现**：代码、测试或 CLI 路径已经存在。
             - **已验证**：已经通过本地 smoke、CI 或真实服务实践验证。
-            - **未实现**：只写规划和安全边界，不写成可执行教程；实现并验证后再升级为操作文档。
+            - **未实现**：只写边界和计划，不写成可执行教程；实现并验证后再升级为操作文档。
 
             ## 本地预览
 
@@ -813,21 +875,55 @@ def _build_chatarch_docs_index_en(package_name: str, docs_domain: str | None = N
             f"""
             # {package_name} Docs
 
-            {package_name} is a ChatArch Python package. This documentation site should hold long-lived usage notes, CLI/API entry points, capability maps, and roadmap notes. After scaffolding, replace placeholders with behavior that is actually implemented, explored, or planned for this package.
+            {package_name} is a ChatArch Python package. This documentation site should hold long-lived usage notes, a command map, a capability map, and Python interface entry points. After scaffolding, replace placeholders with behavior that is actually implemented, explored, or planned for this package.
 
-            ## Choose By Scenario
+            Site entry: <{docs_url}en/>
+
+            ## Choose Documentation by Scenario
 
             | Scenario | Document |
             | --- | --- |
-            | Install the package, run the CLI, and confirm it works | [CLI Capability Map](cli-tree.md) |
+            | Install the package, run the CLI, and confirm it works | [CLI Tree](cli-tree.md) |
+            | Check first-class capabilities and current boundaries | [Capability Map](capability-map.md) |
             | Call package behavior directly from Python | [Python Interface Tree](interface-tree.md) |
-            | Record implemented, verified, and planned capability boundaries | [Development Plan](development-plan.md) |
+
+            ## Documentation Organization
+
+            This template keeps only durable documentation entry points; it does not generate a plan placeholder:
+
+            - **CLI tree**: the most direct command entry point, including the real command tree, status, and update checklist.
+            - **Capability map**: first-class capabilities, boundaries, and out-of-scope areas.
+            - **Interface tree**: importable Python APIs behind the CLI.
+
+            ## Primary Entry Points
+
+            <div class="grid cards" markdown>
+
+            - **CLI Tree**
+
+                Start from the CLI entry point and record implemented commands, command status, and interactive conventions.
+
+                [Open CLI Tree](cli-tree.md)
+
+            - **Capability Map**
+
+                Review current package boundaries and avoid presenting planned work as implemented behavior.
+
+                [Open Capability Map](capability-map.md)
+
+            - **Python Interface Tree**
+
+                Keep the CLI thin and put substantive behavior in importable Python APIs.
+
+                [Open Interface Tree](interface-tree.md)
+
+            </div>
 
             ## Documentation Status
 
             - **Implemented**: code, tests, or CLI routes exist.
             - **Verified**: covered by local smoke, CI, or real-service practice.
-            - **Not implemented**: keep as roadmap and safety notes only; turn into operation docs after implementation and validation.
+            - **Not implemented**: keep as boundary and planning notes only; turn into operation docs after implementation and validation.
 
             ## Local Preview
 
@@ -849,14 +945,36 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
             f"""
             # CLI 能力地图
 
-            这个页面是 `{package_name}` 的 CLI 能力地图。生成后请按真实命令树更新；不要把未实现命令写成已可用操作。
+            这篇文档是 `{package_name}` CLI 的简明能力地图，用来校对哪些命令已经是一等入口、哪些仍然只是边界或规划。生成后请按真实命令树更新；不要把未实现命令写成已可用操作。
 
-            ## 当前命令树
+            可导入 Python 函数映射见 [接口树](interface-tree.md)。当前包能力边界见 [能力地图](capability-map.md)。
+
+            ## 顶层命令
 
             ```text
-            {module_name}
-            └── --help
+            {module_name}                  # {package_name} 命令行入口
+            ├── --help                     # 显示 CLI 帮助和已注册命令
+            └── --version                  # 输出当前包版本
             ```
+
+            ## 基础入口
+
+            ```text
+            {module_name} --help           # 验证命令已安装，并查看当前命令树
+            {module_name} --version        # 验证当前安装版本
+            ```
+
+            `--help` 和 `--version` 是模板默认可验证入口。新增业务命令后，应像 ChatTea 的 CLI 树一样，把命令组单独展开，并给每个命令写一行注释。
+
+            ## 业务命令槽位
+
+            ```text
+            {module_name} <group>          # 按当前包真实能力命名的命令组
+            ├── <command>                  # 说明这个命令做什么
+            └── <command>                  # 说明状态、边界或 checkpoint
+            ```
+
+            这里是占位槽位，不是未来能力承诺。只有当命令、Python 函数和测试都存在时，才把它写成已实现入口。
 
             ## 状态约定
 
@@ -864,13 +982,159 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
             | --- | --- |
             | 已实现 | 命令、函数和测试已经存在 |
             | 已验证 | 已通过 CI、本地 smoke 或真实服务实践 |
-            | 未实现 | 只保留规划；实现前不要写操作教程 |
+            | 规划 / checkpoint | 只保留边界说明；实现前不要写操作教程 |
 
-            ## 更新清单
+            ## 实现合约
 
-            - 新增 CLI 命令时，同步写背后的 Python API。
-            - 新增 mutation 命令时，说明 dry-run / `--apply` / 权限边界。
-            - 新增真实实践后，把验证结果写到对应 Flow 或实践页。
+            - 每个已实现命令都要能追到 Python 函数、类或 service 层。
+            - 如果命令会写远端状态，文档必须说明凭据、权限、dry-run/checkpoint 或确认边界。
+            - 新增命令时，同步更新 README、接口树、能力地图、测试和相关 Flow 页面。
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str:
+    return (
+        textwrap.dedent(
+            f"""
+            # CLI Capability Map
+
+            This page is the compact capability map for the `{package_name}` CLI. Use it to review which commands are first-class entries and which are still boundary or planned slots. After scaffolding, update it with the real command tree; do not present unimplemented commands as available operations.
+
+            Importable Python functions are mapped in [Interface Tree](interface-tree.md). Current package boundaries are tracked in [Capability Map](capability-map.md).
+
+            ## Top-Level Commands
+
+            ```text
+            {module_name}                  # {package_name} command-line entry
+            ├── --help                     # Show CLI help and registered commands
+            └── --version                  # Print the current package version
+            ```
+
+            ## Base Entries
+
+            ```text
+            {module_name} --help           # Verify the command is installed and inspect the current command tree
+            {module_name} --version        # Verify the installed version
+            ```
+
+            `--help` and `--version` are the scaffolded verification entries. After adding business commands, follow the ChatTea CLI tree pattern: split command groups into their own sections and annotate every command line.
+
+            ## Business Command Slots
+
+            ```text
+            {module_name} <group>          # Command group named after real package capability
+            ├── <command>                  # Explain what this command does
+            └── <command>                  # Explain status, boundary, or checkpoint behavior
+            ```
+
+            This is a structural placeholder, not a promise of future capability. Only document a command as implemented after the command, Python function, and tests exist.
+
+            ## Status Contract
+
+            | Status | Meaning |
+            | --- | --- |
+            | Implemented | Command, function, and tests exist |
+            | Verified | Covered by CI, local smoke, or real-service practice |
+            | Planned / checkpoint | Keep only boundary notes; do not write operation tutorials before implementation |
+
+            ## Implementation Contract
+
+            - Every implemented command must map back to a Python function, class, or service layer.
+            - If a command writes remote state, document credentials, permissions, dry-run/checkpoint behavior, or confirmation boundaries.
+            - When adding a command, update README, the interface tree, capability map, tests, and related flow pages together.
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _build_chatarch_docs_capability_map(package_name: str, module_name: str) -> str:
+    return (
+        textwrap.dedent(
+            f"""
+            # 能力地图
+
+            这个页面用于校对 `{package_name}` 当前有哪些一等能力、哪些能力已经验证，以及哪些事情不属于当前包。
+
+            ## 能力分组
+
+            <div class="grid cards" markdown>
+
+            - **命令行入口**
+
+                `{module_name} --help` 和 `{module_name} --version` 是默认可验证入口。
+
+            - **Python 接口**
+
+                实质能力应放到可 import 的 Python 函数、类或 service 层，而不是只写在 Click 回调里。
+
+            - **配置与环境**
+
+                默认接入 ChatEnv；长期、常用、跨命令共享的配置放入 `config.py`。
+
+            </div>
+
+            ## 当前边界
+
+            | 能力 | 状态 | 说明 |
+            | --- | --- | --- |
+            | 命令行基础入口 | 已实现 | 模板生成 Click group、`--version` 和基础测试。 |
+            | ChatEnv 配置提供者 | 已实现 | 默认生成 `config.py` 和 `chatenv.configs` 入口点。 |
+            | 业务命令 | 未实现 | 按当前包真实需求补充，不能在模板里伪造未来命令。 |
+
+            ## 不在当前范围
+
+            - 不生成计划类占位页。
+            - 不把未实现能力写成用户可执行教程。
+            - 不在 README、docs、issue、PR 评论或 CI log 中输出 secret、token、cookie 或 Authorization header。
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def _build_chatarch_docs_capability_map_en(package_name: str, module_name: str) -> str:
+    return (
+        textwrap.dedent(
+            f"""
+            # Capability Map
+
+            Use this page to check which first-class capabilities `{package_name}` currently owns, which ones are verified, and what remains out of scope for this package.
+
+            ## Capability Groups
+
+            <div class="grid cards" markdown>
+
+            - **CLI Entry**
+
+                `{module_name} --help` and `{module_name} --version` are the default verification entry points.
+
+            - **Python API**
+
+                Substantive behavior should live in importable Python functions, classes, or service layers rather than only in Click callbacks.
+
+            - **Config and Environment**
+
+                ChatEnv integration is enabled by default; stable, shared configuration belongs in `config.py`.
+
+            </div>
+
+            ## Current Boundary
+
+            | Capability | Status | Notes |
+            | --- | --- | --- |
+            | CLI base entry | Implemented | The template generates a Click group, `--version`, and a base test. |
+            | ChatEnv provider | Implemented | The template generates `config.py` and a `chatenv.configs` entry point. |
+            | Business commands | Not implemented | Add these from the real package domain; do not fake future commands in the template. |
+
+            ## Out of Scope
+
+            - No plan placeholder page is generated.
+            - No unimplemented capability should be written as a user operation tutorial.
+            - No secret, token, cookie, or Authorization header should appear in README, docs, issues, PR comments, or CI logs.
             """
         ).strip()
         + "\n"
@@ -904,38 +1168,6 @@ def _build_chatarch_docs_interface_tree(package_name: str, module_name: str) -> 
             - 每个实质 CLI 命令都要能映射到 importable API。
             - 文档里的函数签名应和代码一致。
             - 对外输出默认不要泄漏 token、cookie、内部 URL 或人员信息。
-            """
-        ).strip()
-        + "\n"
-    )
-
-
-def _build_chatarch_docs_development_plan(package_name: str) -> str:
-    return (
-        textwrap.dedent(
-            f"""
-            # 开发计划
-
-            这个页面记录 `{package_name}` 的文档化路线。模板只提供结构；请按真实实现和验证进展更新。
-
-            ## Review Contract
-
-            - CLI 命令必须调用可 import 的 Python API。
-            - 文档先写已实现和已验证能力；未实现能力必须标记为未实现。
-            - 敏感信息不得进入 README、docs、issue、PR 评论或 CI log。
-            - 破坏性操作默认 dry-run，或要求显式 `--apply`。
-
-            ## Phase 1：当前已实现能力
-
-            ```text
-            待项目实现后补充。
-            ```
-
-            ## Phase 2：下一步计划
-
-            ```text
-            待项目确认后补充。
-            ```
             """
         ).strip()
         + "\n"
@@ -985,11 +1217,20 @@ def _build_chatarch_mkdocs_yml(package_name: str, docs_domain: str | None = None
                       site_name: {package_name} Documentation
                       nav_translations:
                         首页: Home
-                        CLI / API: CLI / API
-                        CLI 能力地图: CLI Capability Map
+                        命令与接口: Commands and APIs
+                        CLI 树: CLI Tree
+                        能力地图: Capability Map
                         Python 接口树: Python Interface Tree
-                        路线图: Roadmap
-                        开发计划: Development Plan
+            markdown_extensions:
+              - admonition
+              - attr_list
+              - md_in_html
+              - toc:
+                  permalink: true
+              - pymdownx.superfences
+              - pymdownx.inlinehilite
+              - pymdownx.highlight:
+                  anchor_linenums: true
             extra:
               alternate:
                 - name: 中文
@@ -1000,19 +1241,15 @@ def _build_chatarch_mkdocs_yml(package_name: str, docs_domain: str | None = None
                   lang: en
             nav:
               - 首页: index.md
-              - CLI / API:
-                  - CLI 能力地图: cli-tree.md
+              - 命令与接口:
+                  - CLI 树: cli-tree.md
+                  - 能力地图: capability-map.md
                   - Python 接口树: interface-tree.md
-              - 路线图:
-                  - 开发计划: development-plan.md
             """
         ).strip()
         + "\n"
     )
 
-
-def _build_docs_cname(docs_domain: str | None = None) -> str:
-    return f"{_normalize_docs_domain(docs_domain)}\n"
 
 
 def _build_chatarch_agends_md() -> str:
@@ -1049,7 +1286,6 @@ def scaffold_package(
     include_chatenv_provider: bool | None = None,
     chatenv_provider_name: str | None = None,
     docs_domain: str | None = None,
-    include_docs_cname: bool | None = None,
 ) -> ScaffoldResult:
     package_name = package_name.strip()
     if not package_name:
@@ -1063,8 +1299,6 @@ def scaffold_package(
     if include_chatenv_provider is None:
         include_chatenv_provider = template == "chatarch"
     resolved_docs_domain = _normalize_docs_domain(docs_domain) if include_mkdocs else None
-    if include_docs_cname is None:
-        include_docs_cname = bool(include_mkdocs and resolved_docs_domain)
     if chatenv_provider_name and not include_chatenv_provider:
         raise PyPICommandError(
             "chatenv_provider_name requires include_chatenv_provider=True."
@@ -1213,12 +1447,21 @@ def scaffold_package(
                     package_name,
                     module_name,
                 ),
-                project_dir / "docs" / "interface-tree.md": _build_chatarch_docs_interface_tree(
+                project_dir / "docs" / "cli-tree.en.md": _build_chatarch_docs_cli_tree_en(
                     package_name,
                     module_name,
                 ),
-                project_dir / "docs" / "development-plan.md": _build_chatarch_docs_development_plan(
-                    package_name
+                project_dir / "docs" / "capability-map.md": _build_chatarch_docs_capability_map(
+                    package_name,
+                    module_name,
+                ),
+                project_dir / "docs" / "capability-map.en.md": _build_chatarch_docs_capability_map_en(
+                    package_name,
+                    module_name,
+                ),
+                project_dir / "docs" / "interface-tree.md": _build_chatarch_docs_interface_tree(
+                    package_name,
+                    module_name,
                 ),
                 tests_dir
                 / "cli-tests"
@@ -1460,8 +1703,6 @@ def scaffold_package(
                 + "\n",
             }
         )
-        if include_docs_cname and resolved_docs_domain:
-            file_map[project_dir / "docs" / "CNAME"] = _build_docs_cname(resolved_docs_domain)
         if resolved_chatenv_provider_name:
             file_map[src_dir / "config.py"] = _build_chatarch_chatenv_config_py(
                 package_name=package_name,
@@ -1474,9 +1715,10 @@ def scaffold_package(
                 project_dir / "docs" / "index.md",
                 project_dir / "docs" / "index.en.md",
                 project_dir / "docs" / "cli-tree.md",
+                project_dir / "docs" / "cli-tree.en.md",
+                project_dir / "docs" / "capability-map.md",
+                project_dir / "docs" / "capability-map.en.md",
                 project_dir / "docs" / "interface-tree.md",
-                project_dir / "docs" / "development-plan.md",
-                project_dir / "docs" / "CNAME",
                 project_dir / ".github" / "workflows" / "deploy.yaml",
                 project_dir / ".github" / "workflows" / "preview.yaml",
             ):

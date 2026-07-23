@@ -1,0 +1,127 @@
+# ChatPyPI CLI Capability Map
+
+This page is the compact capability map for the current ChatPyPI CLI. Use it to review which Python package lifecycle, PyPI session, and Trusted Publisher flows have first-class commands, and which flows remain checkpoint / planned entries.
+
+Importable Python functions are mapped in [Python Interface Tree](interface-tree.md). Scaffold behavior is documented in [ChatArch Template and Docs Flow](template-flow.md). Publishing and Trusted Publisher practice is documented in [Publishing and Trusted Publisher Flow](pypi-flow.md).
+
+## Top-Level Commands
+
+```text
+chatpypi                  # Python package lifecycle and PyPI operation entry
+├── init                  # Compatibility shortcut: create a src-layout Python package
+├── build                 # Compatibility shortcut: build wheel / sdist
+├── check                 # Compatibility shortcut: validate dist
+├── upload                # Compatibility shortcut: upload dist
+├── probe                 # Compatibility shortcut: check whether a PyPI name is available
+├── pkg                   # Package scaffold, build, check, upload, and probe
+├── auth                  # Session, account, and human-checkpoint flows
+├── project               # Read PyPI project views for the logged-in account
+├── publisher             # Read or configure Trusted Publisher
+├── profile               # Planned: local ChatPyPI profile management
+├── config                # Planned: local config key/value management
+├── token                 # Planned / checkpoint: PyPI API token management
+├── doctor                # Local config, session, and safety checks
+└── docs                  # Documentation links and example commands
+```
+
+## Package Lifecycle
+
+```text
+chatpypi pkg              # Package lifecycle group
+├── init                  # Create default or chatarch scaffold packages
+├── build                 # Build wheel / sdist; optionally clean dist first
+├── check                 # Run twine check against built distributions
+├── upload                # Upload dist with token env / password env
+└── probe                 # Query PyPI package-name conflicts
+
+chatpypi init             # Compatibility alias for `chatpypi pkg init`
+chatpypi build            # Compatibility alias for `chatpypi pkg build`
+chatpypi check            # Compatibility alias for `chatpypi pkg check`
+chatpypi upload           # Compatibility alias for `chatpypi pkg upload`
+chatpypi probe            # Compatibility alias for `chatpypi pkg probe`
+```
+
+`pkg init -t chatarch` is the core entry for this template update: it generates README, MkDocs, CLI tree, capability map, interface tree, CI/Preview/Deploy workflows, and a ChatEnv provider. The default docs keep structural placeholders only and do not generate plan pages or repository-level domain files.
+
+## Authentication and Session
+
+```text
+chatpypi auth             # Session, account, and assisted bootstrap flows
+├── login                 # Login with username/password/TOTP and write session token
+├── logout                # Clear the local session token
+├── whoami                # Read back the current account summary from session
+├── register              # Planned / checkpoint: account registration
+├── verify-email          # Planned / checkpoint: email verification
+├── setup-2fa             # Planned / checkpoint: 2FA initialization
+├── recovery-codes        # Planned / checkpoint: recovery-code handling
+└── session               # Env-backed PyPI session management
+    ├── show              # Print a non-sensitive session summary
+    ├── export            # Planned / checkpoint: export session
+    ├── import            # Planned / checkpoint: import session
+    └── clear             # Clear session token
+```
+
+Authentication commands must respect the security boundary: passwords, TOTP secrets, session tokens, and cookies are only read/written through env/profile/private stores, and neither CLI output nor docs may reveal real values. `auth login`, `auth whoami`, and `auth session show|clear` are the current implemented paths. Registration, email verification, 2FA setup, and recovery codes remain human checkpoints.
+
+## Projects and Trusted Publisher
+
+```text
+chatpypi project          # PyPI project views for the logged-in account
+├── list                  # Implemented: read project list
+└── show                  # Planned: show one project detail
+
+chatpypi publisher        # Trusted Publisher reads and writes
+├── list                  # Implemented: read account-level publisher status
+├── detail                # Implemented: read project-level publisher status
+├── add-github            # Implemented: add/idempotently verify active GitHub publisher
+├── pending-list          # Implemented: read pending publishers
+├── pending-add           # Implemented: add a pending-publisher exception
+└── pending-remove        # Implemented: clean a pending publisher
+```
+
+The normal path is active Trusted Publisher setup for an existing PyPI project: use `publisher add-github` and read back confirmation. `pending-*` commands are only for true pending exceptions or stale pending cleanup; they are not the default Publisher path.
+
+## Profile, Config, and Token Boundaries
+
+```text
+chatpypi profile          # Planned: local ChatPyPI profile management
+├── list                  # Planned: list profiles
+├── show                  # Planned: show non-sensitive profile fields
+├── use                   # Planned: switch active profile
+├── create                # Planned: create profile
+└── delete                # Planned: delete profile
+
+chatpypi config           # Planned: local config key/value management
+├── list                  # Planned: list config values
+├── get                   # Planned: read config value
+├── set                   # Planned: write config value
+└── unset                 # Planned: delete config value
+
+chatpypi token            # Planned / checkpoint: PyPI API token management
+├── list                  # Planned: list token summaries without revealing tokens
+├── create                # Planned: create token and store one-time secret safely
+└── revoke                # Planned: revoke token after confirmation
+```
+
+These commands reserve first-class entries, but they are not implemented automation tutorials. Token create/revoke in particular involves PyPI pages, one-time secrets, and permission confirmation, so docs must only describe boundaries until implementation and validation exist.
+
+## Diagnostics and Docs
+
+```text
+chatpypi doctor           # Local config and session diagnostics
+└── check                 # Implemented: check config, session, and safety boundaries
+
+chatpypi docs             # Documentation links and examples
+├── links                 # Print core documentation links
+├── examples              # Print common example commands
+└── open                  # Print a documentation URL for a topic
+```
+
+`doctor check` is the preflight for local state and session readback. The `docs` group performs no remote writes; it only links back to the docs site and example commands.
+
+## Implementation Contract
+
+- Every implemented command must map back to a Python function or service layer; business logic should not live only in Click callbacks.
+- If a command writes remote state, document credentials, permissions, dry-run/checkpoint behavior, or confirmation boundaries.
+- Planned entries should only carry boundary notes, not executable tutorials.
+- When the CLI tree gains a command, update README, the interface tree, tests, and related flow pages together.

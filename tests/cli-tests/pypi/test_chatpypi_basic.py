@@ -516,9 +516,14 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / "docs" / "index.md").exists()
     assert (project_dir / "docs" / "index.en.md").exists()
     assert (project_dir / "docs" / "cli-tree.md").exists()
+    assert (project_dir / "docs" / "cli-tree.en.md").exists()
+    assert (project_dir / "docs" / "capability-map.md").exists()
+    assert (project_dir / "docs" / "capability-map.en.md").exists()
     assert (project_dir / "docs" / "interface-tree.md").exists()
-    assert (project_dir / "docs" / "development-plan.md").exists()
-    assert (project_dir / "docs" / "CNAME").exists()
+    assert not (project_dir / "docs" / "commands.md").exists()
+    assert not (project_dir / "docs" / "commands.en.md").exists()
+    assert not (project_dir / "docs" / "development-plan.md").exists()
+    assert not (project_dir / "docs" / "CNAME").exists()
     assert (project_dir / "README.en.md").exists()
     assert (project_dir / "mkdocs.yml").exists()
     assert (project_dir / "tests" / "cli-tests" / "README.md").exists()
@@ -555,10 +560,26 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "docs_structure: suffix" in mkdocs_text
     assert "fallback_to_default: true" in mkdocs_text
     assert "navigation.tabs" in mkdocs_text
+    assert "- attr_list" in mkdocs_text
+    assert "- md_in_html" in mkdocs_text
+    assert "- 命令与接口:" in mkdocs_text
+    assert "CLI / API" not in mkdocs_text
+    assert "CLI 树: cli-tree.md" in mkdocs_text
+    assert "能力地图: capability-map.md" in mkdocs_text
     assert "link: /mychat-cli/en/" in mkdocs_text
-    assert (project_dir / "docs" / "CNAME").read_text(encoding="utf-8") == "arch.gh.wzhecnu.cn\n"
-    assert "未实现" in (project_dir / "docs" / "cli-tree.md").read_text(encoding="utf-8")
-    assert "可 import 的 Python API" in (project_dir / "docs" / "development-plan.md").read_text(encoding="utf-8")
+    assert "路线图" not in mkdocs_text
+    assert "development-plan" not in mkdocs_text
+    cli_tree_text = (project_dir / "docs" / "cli-tree.md").read_text(encoding="utf-8")
+    assert "# CLI 能力地图" in cli_tree_text
+    assert "## 顶层命令" in cli_tree_text
+    assert "## 业务命令槽位" in cli_tree_text
+    assert "像 ChatTea 的 CLI 树一样" in cli_tree_text
+    assert "├── --help" in cli_tree_text
+    assert "└── --version" in cli_tree_text
+    capability_text = (project_dir / "docs" / "capability-map.md").read_text(encoding="utf-8")
+    assert "# 能力地图" in capability_text
+    assert "不生成计划类占位页" in capability_text
+    assert "可 import 的 Python 函数" in (project_dir / "docs" / "interface-tree.md").read_text(encoding="utf-8")
     publish_text = (project_dir / ".github" / "workflows" / "publish.yml").read_text(
         encoding="utf-8"
     )
@@ -603,8 +624,13 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "https://arch.gh.wzhecnu.cn/mychat-cli/" in readme_text
     assert "OWNER/REPO" not in readme_text
     assert "docs-mkdocs" in readme_text
+    assert "[英文版](README.en.md)" in readme_text
+    assert "[English](README.en.md)" not in readme_text
     assert "mychat_cli --help" in readme_text
     assert "mychat_cli --version" in readme_text
+    assert "按场景选择文档" in readme_text
+    assert "docs/cli-tree.md" in readme_text
+    assert "docs/capability-map.md" in readme_text
     assert "hello ChatArch" not in readme_text
     assert "CommandSchema" in readme_text
     config_text = (project_dir / "src" / "mychat_cli" / "config.py").read_text(
@@ -615,6 +641,18 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert '_storage_dir = "MychatCli"' in config_text
     assert "def test(cls) -> None:" in config_text
     assert "Schema loaded; no network test is required." in config_text
+
+
+def test_chatpypi_init_help_does_not_expose_cname_options():
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["init", "--help"])
+
+    assert result.exit_code == 0
+    assert "--docs-domain" in result.output
+    assert "CNAME" not in result.output
+    assert "with-docs-cname" not in result.output
+    assert "without-docs-cname" not in result.output
 
 
 def test_chatpypi_init_chatarch_template_accepts_custom_docs_domain(tmp_path):
@@ -632,7 +670,6 @@ def test_chatpypi_init_chatarch_template_accepts_custom_docs_domain(tmp_path):
             str(project_dir),
             "--docs-domain",
             "docs.example.com",
-            "--without-docs-cname",
         ],
     )
 

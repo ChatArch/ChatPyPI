@@ -32,9 +32,9 @@ python -m build
 
 ## Current CLI Tree
 
-`ChatPyPI` is growing from a package lifecycle helper into a combined
-"package + post-registration PyPI operations" CLI. The current public tree now
-reserves:
+`ChatPyPI` is expanding from a pure package lifecycle helper into a "package + logged-in PyPI operations" tool. The current public tree is reserved as follows:
+
+For the fully annotated command tree, see https://arch.gh.wzhecnu.cn/ChatPyPI/en/cli-tree/
 
 ```text
 chatpypi

@@ -18,7 +18,6 @@ resolve_dist_dir
 
 - ChatArch docs URL 默认域名。
 - MkDocs Material + static i18n 配置。
-- `docs/CNAME` 生成。
 - PR preview URL。
 - 初始 docs 骨架。
 

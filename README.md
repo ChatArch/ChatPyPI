@@ -12,7 +12,7 @@
 
 <div align="center">
 
-[English](README.en.md) | [简体中文](README.md)
+[英文版](README.en.md) | [简体中文](README.md)
 </div>
 
 # ChatPyPI
@@ -30,9 +30,11 @@ python -m pytest -q
 python -m build
 ```
 
-## 当前 CLI 树
+## 当前命令树
 
 `ChatPyPI` 正在从单纯的包生命周期工具，扩展为“包 + 登录后 PyPI 操作”工具。当前公共树结构已经预留：
+
+完整带注释的命令树见文档站： https://arch.gh.wzhecnu.cn/ChatPyPI/cli-tree/
 
 ```text
 chatpypi
@@ -166,14 +168,14 @@ chatpypi auth session show --format json
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
 
-## CLI 规范
+## 命令行规范
 
-这个模板默认依赖 `chatstyle>=0.1.0,<0.2.0` 和 `chatenv>=0.2.0,<0.3.0`，新的命令应优先使用：
+这个模板默认依赖 `chatstyle>=0.1.0,<0.2.0` 和 `chatenv>=0.2.0,<0.3.0`，新增命令应优先使用：
 
 - `CommandSchema` / `CommandField` 描述输入。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
-- `chatpypi init -t chatarch` 默认生成 `config.py` 和 `chatenv.configs` entry point；只有明确传 `--without-chatenv-provider` 时才跳过。
+- `chatpypi init -t chatarch` 默认生成 `config.py` 和 `chatenv.configs` 入口点；只有明确传 `--without-chatenv-provider` 时才跳过。
 
 ## 目录结构
 

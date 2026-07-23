@@ -47,12 +47,12 @@ chatpypi --version
 
 预期过程和结果：
   1. 执行 `chatpypi init mychat-cli -t chatarch --project-dir <tmp>/mychat-cli`。
-  2. 预期额外生成 `DEVELOP.md`、`CHANGELOG.md`、`AGENTS.md`、`README.en.md`、`mkdocs.yml`、`src/<module>/cli.py`、`docs/index.md`、`docs/index.en.md`、`docs/cli-tree.md`、`docs/interface-tree.md`、`docs/development-plan.md`、`docs/CNAME`、`tests/cli-tests/README.md`、`tests/mock-cli-tests/README.md`、`tests/code-tests/README.md`。
+  2. 预期额外生成 `DEVELOP.md`、`CHANGELOG.md`、`AGENTS.md`、`README.en.md`、`mkdocs.yml`、`src/<module>/cli.py`、`docs/index.md`、`docs/index.en.md`、`docs/cli-tree.md`、`docs/cli-tree.en.md`、`docs/capability-map.md`、`docs/capability-map.en.md`、`docs/interface-tree.md`、`tests/cli-tests/README.md`、`tests/mock-cli-tests/README.md`、`tests/code-tests/README.md`；默认不生成计划页、命令地图替代页或仓库级域名文件。
   3. 预期生成 `.github/workflows/ci.yml`、`publish.yml`、`deploy.yaml`、`preview.yaml`。
   4. 默认 README 使用中文，并在开头包含 PyPI version、GitHub Actions 和 mkdocs docs badge；badge、`pyproject.toml` URL 与 `mkdocs.yml` 仓库链接默认指向 `ChatArch/<package>`，文档站默认使用 `arch.gh.wzhecnu.cn/<package>/`。
   5. `publish.yml` 只应由 `v*` tag 或手动 `workflow_dispatch` 触发，不应由普通分支 push 触发。
-  6. 这些文件应体现 CLI 规范、开发规范、文档/测试约定、MkDocs i18n 语言切换、PR preview 和自动化基础说明。
-  7. 可通过 `--without-mkdocs` 跳过 mkdocs/docs 文件，通过 `--without-workflows` 跳过 `.github/workflows/`；可用 `--docs-domain` 调整文档域名，用 `--without-docs-cname` 关闭 `docs/CNAME`。
+  6. 这些文件应体现 CLI 规范、开发规范、文档/测试约定、MkDocs i18n 语言切换、首页非线性导航、CLI 树、能力地图、PR preview 和自动化基础说明。
+  7. 可通过 `--without-mkdocs` 跳过 mkdocs/docs 文件，通过 `--without-workflows` 跳过 `.github/workflows/`；可用 `--docs-domain` 调整文档 URL 和 preview 域名。
 
 参考执行脚本（伪代码）：
 
