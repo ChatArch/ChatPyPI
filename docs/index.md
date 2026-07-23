@@ -12,7 +12,6 @@ ChatPyPI 是 ChatArch 的 Python 包生命周期和 PyPI 自动化命令行工�
 | 创建 ChatArch Python 包模板，并生成 MkDocs / i18n / Actions | [ChatArch 模板与 Docs Flow](template-flow.md) | 已实现，当前 PR 更新模板规范 |
 | 构建、检查、上传 Python 包，或配置 Trusted Publisher | [发布与 Trusted Publisher Flow](pypi-flow.md) | 部分已实现，部分保留人工 checkpoint |
 | 查看命令背后的 Python 接口边界 | [Python 接口树](interface-tree.md) | 已整理 |
-| 维护后续路线和 review 合约 | [开发计划](development-plan.md) | 项目自身维护页，不属于新模板默认输出 |
 
 ## 核心入口
 
@@ -26,7 +25,7 @@ ChatPyPI 是 ChatArch 的 Python 包生命周期和 PyPI 自动化命令行工�
 
 - **模板 Flow**
 
-    校对 `chatpypi init -t chatarch` 默认生成哪些文档槽位、workflow 和 CNAME 行为。
+    校对 `chatpypi init -t chatarch` 默认生成哪些文档槽位和 workflow。
 
     [查看模板 Flow](template-flow.md)
 
@@ -52,7 +51,6 @@ ChatPyPI 是 ChatArch 的 Python 包生命周期和 PyPI 自动化命令行工�
 - **模板创建**：ChatPyPI 作为模板生成器时应该创建哪些 docs、workflow 和配置。
 - **PyPI 发布**：包生命周期、登录态、项目和 Trusted Publisher 操作 Flow。
 - **命令与接口**：命令树、Python 接口映射和薄命令行约束。
-- **路线图**：只记录未实现能力的设计方向和保护要求。
 
 ## 状态约定
 

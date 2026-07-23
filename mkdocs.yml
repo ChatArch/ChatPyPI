@@ -42,8 +42,6 @@ plugins:
             命令与接口: Commands and APIs
             CLI 树: CLI Tree
             Python 接口树: Python Interface Tree
-            路线图: Roadmap
-            开发计划: Development Plan
 markdown_extensions:
   - admonition
   - attr_list
@@ -71,5 +69,3 @@ nav:
   - 命令与接口:
       - CLI 树: cli-tree.md
       - Python 接口树: interface-tree.md
-  - 路线图:
-      - 开发计划: development-plan.md

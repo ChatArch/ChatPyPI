@@ -943,34 +943,38 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
     return (
         textwrap.dedent(
             f"""
-            # CLI 树
+            # CLI 能力地图
 
-            这个页面是 `{package_name}` 最直观的命令展示入口，也承担命令地图职责。生成后请按真实命令树更新；不要把未实现命令写成已可用操作。
+            这篇文档是 `{package_name}` CLI 的简明能力地图，用来校对哪些命令已经是一等入口、哪些仍然只是边界或规划。生成后请按真实命令树更新；不要把未实现命令写成已可用操作。
 
-            ## 当前命令树
+            可导入 Python 函数映射见 [接口树](interface-tree.md)。当前包能力边界见 [能力地图](capability-map.md)。
+
+            ## 顶层命令
 
             ```text
-            {module_name}
-            `-- --help      # 显示 CLI 帮助和已注册命令
+            {module_name}                  # {package_name} 命令行入口
+            ├── --help                     # 显示 CLI 帮助和已注册命令
+            └── --version                  # 输出当前包版本
             ```
 
-            ## 命令分组
+            ## 基础入口
 
-            <div class="grid cards" markdown>
+            ```text
+            {module_name} --help           # 验证命令已安装，并查看当前命令树
+            {module_name} --version        # 验证当前安装版本
+            ```
 
-            - **基础入口**
+            `--help` 和 `--version` 是模板默认可验证入口。新增业务命令后，应像 ChatTea 的 CLI 树一样，把命令组单独展开，并给每个命令写一行注释。
 
-                `--help` 和 `--version` 应始终可用，便于验证安装和版本。
+            ## 业务命令槽位
 
-            - **业务命令**
+            ```text
+            {module_name} <group>          # 按当前包真实能力命名的命令组
+            ├── <command>                  # 说明这个命令做什么
+            └── <command>                  # 说明状态、边界或 checkpoint
+            ```
 
-                新增命令时先写真实命令树、状态和背后的 Python API，不写未来接口。
-
-            - **交互命令**
-
-                需要补问参数时使用 ChatStyle 的 `-i` / `-I` 约定，并让非交互环境快速失败。
-
-            </div>
+            这里是占位槽位，不是未来能力承诺。只有当命令、Python 函数和测试都存在时，才把它写成已实现入口。
 
             ## 状态约定
 
@@ -978,13 +982,13 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
             | --- | --- |
             | 已实现 | 命令、函数和测试已经存在 |
             | 已验证 | 已通过 CI、本地 smoke 或真实服务实践 |
-            | 未实现 | 只保留边界说明；实现前不要写操作教程 |
+            | 规划 / checkpoint | 只保留边界说明；实现前不要写操作教程 |
 
-            ## 更新清单
+            ## 实现合约
 
-            - 新增命令行命令时，同步写背后的 Python 接口。
-            - 新增 mutation 命令时，说明 dry-run / `--apply` / 权限边界。
-            - 新增真实实践后，把验证结果写到对应 Flow 或实践页。
+            - 每个已实现命令都要能追到 Python 函数、类或 service 层。
+            - 如果命令会写远端状态，文档必须说明凭据、权限、dry-run/checkpoint 或确认边界。
+            - 新增命令时，同步更新 README、接口树、能力地图、测试和相关 Flow 页面。
             """
         ).strip()
         + "\n"
@@ -995,34 +999,38 @@ def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str
     return (
         textwrap.dedent(
             f"""
-            # CLI Tree
+            # CLI Capability Map
 
-            This page is the most direct command entry point for `{package_name}` and also serves as the command map. After scaffolding, update it with the real command tree; do not present unimplemented commands as available operations.
+            This page is the compact capability map for the `{package_name}` CLI. Use it to review which commands are first-class entries and which are still boundary or planned slots. After scaffolding, update it with the real command tree; do not present unimplemented commands as available operations.
 
-            ## Current Command Tree
+            Importable Python functions are mapped in [Interface Tree](interface-tree.md). Current package boundaries are tracked in [Capability Map](capability-map.md).
+
+            ## Top-Level Commands
 
             ```text
-            {module_name}
-            `-- --help      # Show CLI help and registered commands
+            {module_name}                  # {package_name} command-line entry
+            ├── --help                     # Show CLI help and registered commands
+            └── --version                  # Print the current package version
             ```
 
-            ## Command Groups
+            ## Base Entries
 
-            <div class="grid cards" markdown>
+            ```text
+            {module_name} --help           # Verify the command is installed and inspect the current command tree
+            {module_name} --version        # Verify the installed version
+            ```
 
-            - **Base Entry**
+            `--help` and `--version` are the scaffolded verification entries. After adding business commands, follow the ChatTea CLI tree pattern: split command groups into their own sections and annotate every command line.
 
-                `--help` and `--version` should always work so installation and version checks are easy.
+            ## Business Command Slots
 
-            - **Business Commands**
+            ```text
+            {module_name} <group>          # Command group named after real package capability
+            ├── <command>                  # Explain what this command does
+            └── <command>                  # Explain status, boundary, or checkpoint behavior
+            ```
 
-                When adding commands, document the real command tree, status, and Python API behind them; do not document future interfaces as current behavior.
-
-            - **Interactive Commands**
-
-                Use the ChatStyle `-i` / `-I` convention when parameters can be recovered interactively, and fail fast in non-interactive environments.
-
-            </div>
+            This is a structural placeholder, not a promise of future capability. Only document a command as implemented after the command, Python function, and tests exist.
 
             ## Status Contract
 
@@ -1030,13 +1038,13 @@ def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str
             | --- | --- |
             | Implemented | Command, function, and tests exist |
             | Verified | Covered by CI, local smoke, or real-service practice |
-            | Not implemented | Keep only boundary notes; do not write operation tutorials before implementation |
+            | Planned / checkpoint | Keep only boundary notes; do not write operation tutorials before implementation |
 
-            ## Update Checklist
+            ## Implementation Contract
 
-            - When adding a CLI command, document the Python API behind it.
-            - For mutation commands, document dry-run / `--apply` / permission boundaries.
-            - After real practice, record validation in the related flow or practice page.
+            - Every implemented command must map back to a Python function, class, or service layer.
+            - If a command writes remote state, document credentials, permissions, dry-run/checkpoint behavior, or confirmation boundaries.
+            - When adding a command, update README, the interface tree, capability map, tests, and related flow pages together.
             """
         ).strip()
         + "\n"
@@ -1243,9 +1251,6 @@ def _build_chatarch_mkdocs_yml(package_name: str, docs_domain: str | None = None
     )
 
 
-def _build_docs_cname(docs_domain: str | None = None) -> str:
-    return f"{_normalize_docs_domain(docs_domain)}\n"
-
 
 def _build_chatarch_agends_md() -> str:
     return (
@@ -1281,7 +1286,6 @@ def scaffold_package(
     include_chatenv_provider: bool | None = None,
     chatenv_provider_name: str | None = None,
     docs_domain: str | None = None,
-    include_docs_cname: bool | None = None,
 ) -> ScaffoldResult:
     package_name = package_name.strip()
     if not package_name:
@@ -1295,8 +1299,6 @@ def scaffold_package(
     if include_chatenv_provider is None:
         include_chatenv_provider = template == "chatarch"
     resolved_docs_domain = _normalize_docs_domain(docs_domain) if include_mkdocs else None
-    if include_docs_cname is None:
-        include_docs_cname = False
     if chatenv_provider_name and not include_chatenv_provider:
         raise PyPICommandError(
             "chatenv_provider_name requires include_chatenv_provider=True."
@@ -1701,8 +1703,6 @@ def scaffold_package(
                 + "\n",
             }
         )
-        if include_docs_cname and resolved_docs_domain:
-            file_map[project_dir / "docs" / "CNAME"] = _build_docs_cname(resolved_docs_domain)
         if resolved_chatenv_provider_name:
             file_map[src_dir / "config.py"] = _build_chatarch_chatenv_config_py(
                 package_name=package_name,
@@ -1719,7 +1719,6 @@ def scaffold_package(
                 project_dir / "docs" / "capability-map.md",
                 project_dir / "docs" / "capability-map.en.md",
                 project_dir / "docs" / "interface-tree.md",
-                project_dir / "docs" / "CNAME",
                 project_dir / ".github" / "workflows" / "deploy.yaml",
                 project_dir / ".github" / "workflows" / "preview.yaml",
             ):

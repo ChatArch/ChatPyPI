@@ -570,10 +570,12 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "路线图" not in mkdocs_text
     assert "development-plan" not in mkdocs_text
     cli_tree_text = (project_dir / "docs" / "cli-tree.md").read_text(encoding="utf-8")
-    assert "# CLI 树" in cli_tree_text
-    assert "最直观的命令展示入口" in cli_tree_text
-    assert "grid cards" in cli_tree_text
-    assert "`-- --help" in cli_tree_text
+    assert "# CLI 能力地图" in cli_tree_text
+    assert "## 顶层命令" in cli_tree_text
+    assert "## 业务命令槽位" in cli_tree_text
+    assert "像 ChatTea 的 CLI 树一样" in cli_tree_text
+    assert "├── --help" in cli_tree_text
+    assert "└── --version" in cli_tree_text
     capability_text = (project_dir / "docs" / "capability-map.md").read_text(encoding="utf-8")
     assert "# 能力地图" in capability_text
     assert "不生成计划类占位页" in capability_text
@@ -641,6 +643,18 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "Schema loaded; no network test is required." in config_text
 
 
+def test_chatpypi_init_help_does_not_expose_cname_options():
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["init", "--help"])
+
+    assert result.exit_code == 0
+    assert "--docs-domain" in result.output
+    assert "CNAME" not in result.output
+    assert "with-docs-cname" not in result.output
+    assert "without-docs-cname" not in result.output
+
+
 def test_chatpypi_init_chatarch_template_accepts_custom_docs_domain(tmp_path):
     runner = CliRunner()
     project_dir = tmp_path / "mychat-cli"
@@ -673,29 +687,6 @@ def test_chatpypi_init_chatarch_template_accepts_custom_docs_domain(tmp_path):
     assert "https://docs.example.com/${repo}/dev/" in (
         project_dir / ".github" / "workflows" / "preview.yaml"
     ).read_text(encoding="utf-8")
-
-
-def test_chatpypi_init_chatarch_template_can_enable_docs_cname(tmp_path):
-    runner = CliRunner()
-    project_dir = tmp_path / "mychat-cli"
-
-    result = runner.invoke(
-        cli,
-        [
-            "init",
-            "mychat-cli",
-            "-t",
-            "chatarch",
-            "--project-dir",
-            str(project_dir),
-            "--docs-domain",
-            "docs.example.com",
-            "--with-docs-cname",
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert (project_dir / "docs" / "CNAME").read_text(encoding="utf-8") == "docs.example.com\n"
 
 
 def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):

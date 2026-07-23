@@ -4,7 +4,7 @@
 
 ## 目标
 
-生成一个 ChatArch 系列 Python 包时，默认带上结构化占位，而不是具体项目计划：
+生成一个 ChatArch 系列 Python 包时，默认带上结构化占位，而不是具体项目计划或仓库级域名文件：
 
 ```text
 <package>/
@@ -26,7 +26,7 @@
     └── publish.yml
 ```
 
-默认不生成 `docs/development-plan.md`、`docs/commands.md` 或 `docs/CNAME`。
+默认文档只保留长期有用的结构槽位：首页导航、CLI 树、能力地图和 Python 接口树。
 
 ## 当前命令
 
@@ -40,7 +40,7 @@ chatpypi init my-package -t chatarch --project-dir ./my-package
 - 接入 `mkdocs-static-i18n` suffix 模式。
 - 中文默认站点，英文内容放在 `.en.md` 文件和语言切换入口里。
 - 生成首页导航、CLI 树、能力地图和 Python 接口树。
-- 不默认创建 `docs/CNAME`；只有显式传 `--with-docs-cname` 才生成。
+- 生成 CI、发布、Preview Docs 和 Deploy Docs workflow。
 - PR preview 使用 `mike deploy dev`。
 - preview comment 使用 ChatArch Pages 域名。
 
@@ -48,15 +48,12 @@ chatpypi init my-package -t chatarch --project-dir ./my-package
 
 ```bash
 chatpypi init my-package -t chatarch \
-  --docs-domain docs.example.com \
-  --with-docs-cname
+  --docs-domain docs.example.com
 ```
 
 | 参数 | 含义 |
 | --- | --- |
-| `--docs-domain` | 生成 docs URL 和 preview URL 使用的域名。默认 `arch.gh.wzhecnu.cn`。 |
-| `--with-docs-cname` | 显式生成 `docs/CNAME`，仅用于这个仓库确实需要管理自定义域名文件的情况。 |
-| `--without-docs-cname` | 保持不生成 `docs/CNAME`。这是当前默认行为。 |
+| `--docs-domain` | 生成 docs URL、badge、preview URL 和 metadata 使用的域名。默认 `arch.gh.wzhecnu.cn`。 |
 | `--without-mkdocs` | 不生成 MkDocs/docs 文件。 |
 | `--without-workflows` | 不生成 GitHub Actions workflow。 |
 
@@ -69,5 +66,4 @@ chatpypi init my-package -t chatarch \
 - 生成包的 `pyproject.toml` docs extra 必须包含 `mkdocs-static-i18n`。
 - `mkdocs.yml` 必须启用 `attr_list` 和 `md_in_html`，支持 Material grid cards。
 - `preview.yaml` 不应再使用 `github.io`。
-- 如果显式生成 `docs/CNAME`，文件只写域名，不写 scheme 或 path。
 - 生成后的 package 应能通过 `mkdocs build --strict`。
