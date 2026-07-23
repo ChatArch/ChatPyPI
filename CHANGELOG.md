@@ -7,6 +7,7 @@
 - Add MkDocs Material + static i18n docs scaffolding to the ChatArch package template.
 - Generate ChatArch Pages URLs and Preview Docs links from a configurable docs domain; keep `docs/CNAME` behind explicit opt-in.
 - Add starter docs pages for scenario index, CLI tree, capability map, and Python interface tree without a default development-plan page.
+- Promote ChatPyPI's own `docs/cli-tree.md` into the primary annotated CLI tree entry and add an English mirror.
 
 ### Changed
 

@@ -40,10 +40,20 @@ plugins:
             PyPI 发布: PyPI Publishing
             发布与 Trusted Publisher Flow: Publishing and Trusted Publisher Flow
             命令与接口: Commands and APIs
-            命令能力地图: Command Capability Map
+            CLI 树: CLI Tree
             Python 接口树: Python Interface Tree
             路线图: Roadmap
             开发计划: Development Plan
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.highlight:
+      anchor_linenums: true
 extra:
   alternate:
     - name: 中文
@@ -59,7 +69,7 @@ nav:
   - PyPI 发布:
       - 发布与 Trusted Publisher Flow: pypi-flow.md
   - 命令与接口:
-      - 命令能力地图: cli-tree.md
+      - CLI 树: cli-tree.md
       - Python 接口树: interface-tree.md
   - 路线图:
       - 开发计划: development-plan.md
