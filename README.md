@@ -12,7 +12,7 @@
 
 <div align="center">
 
-[English](README.en.md) | [简体中文](README.md)
+[英文版](README.en.md) | [简体中文](README.md)
 </div>
 
 # ChatPyPI
@@ -30,7 +30,7 @@ python -m pytest -q
 python -m build
 ```
 
-## 当前 CLI 树
+## 当前命令树
 
 `ChatPyPI` 正在从单纯的包生命周期工具，扩展为“包 + 登录后 PyPI 操作”工具。当前公共树结构已经预留：
 

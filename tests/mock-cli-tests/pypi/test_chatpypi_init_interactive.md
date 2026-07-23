@@ -54,7 +54,7 @@ chatpypi init -I
 
 预期过程和结果：
 1. 在交互可用条件下执行 `chatpypi init`，并把 `template` 选择为 `chatarch`。
-2. 预期交互继续询问是否创建 mkdocs、docs domain / CNAME 和 GitHub workflow 文件。
+2. 预期交互继续询问是否创建 mkdocs、docs domain、是否显式生成 CNAME 和 GitHub workflow 文件；CNAME 默认关闭。
 3. 预期生成的模板仓库额外包含开发规范、测试约定、初始化说明文件、mkdocs 文档配置、英文 `.en.md` 文档副本、docs deploy workflow 和 PR preview workflow。
 
 参考执行脚本（伪代码）：

@@ -387,7 +387,7 @@ def _echo_json(payload: dict[str, object]) -> None:
     "--with-docs-cname/--without-docs-cname",
     "include_docs_cname",
     default=None,
-    help="Create docs/CNAME for the configured docs domain. Defaults to on when mkdocs files are created.",
+    help="Create docs/CNAME for the configured docs domain. Defaults to off; enable only for repos that intentionally own a custom domain file.",
 )
 @click.option(
     "--with-workflows/--without-workflows",
@@ -509,7 +509,7 @@ def init(
         if include_mkdocs and include_docs_cname is None:
             include_docs_cname = ask_confirm(
                 "Create docs/CNAME for the docs domain?",
-                default=True,
+                default=False,
             )
         elif include_docs_cname is None:
             include_docs_cname = False

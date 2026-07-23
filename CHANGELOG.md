@@ -5,8 +5,8 @@
 ### Added
 
 - Add MkDocs Material + static i18n docs scaffolding to the ChatArch package template.
-- Generate ChatArch Pages URLs, Preview Docs links, and optional `docs/CNAME` from a configurable docs domain.
-- Add starter docs pages for scenario index, CLI capability map, Python interface tree, and development plan.
+- Generate ChatArch Pages URLs and Preview Docs links from a configurable docs domain; keep `docs/CNAME` behind explicit opt-in.
+- Add starter docs pages for scenario index, command map, capability map, and Python interface tree without a default development-plan page.
 
 ### Changed
 

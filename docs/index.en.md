@@ -6,7 +6,7 @@ ChatPyPI is ChatArch's Python package lifecycle and PyPI automation CLI/API pack
 
 | Scenario | Document | Status |
 | --- | --- | --- |
-| Create a ChatArch Python package template with MkDocs, i18n, Actions, and CNAME | [ChatArch Template and Docs Flow](template-flow.md) | Implemented; this PR updates the template contract |
+| Create a ChatArch Python package template with MkDocs, i18n, and Actions | [ChatArch Template and Docs Flow](template-flow.md) | Implemented; this PR updates the template contract |
 | Build, check, upload Python packages, or configure Trusted Publishers | [Publishing and Trusted Publisher Flow](pypi-flow.md) | Partially implemented; some flows remain human-checkpointed |
 | Review the current command tree and not-implemented boundaries | [CLI Capability Map](cli-tree.md) | Documented |
 | Review Python interfaces behind the CLI | [Python Interface Tree](interface-tree.md) | Documented |
@@ -18,7 +18,7 @@ This site follows the ChatArch docs convention:
 
 - **Template Creation**: what ChatPyPI should generate as a package scaffold.
 - **PyPI Publishing**: package lifecycle, login/session, project, and Trusted Publisher flows.
-- **CLI / API**: command tree, Python API mapping, and thin CLI constraints.
+- **Commands and APIs**: command tree, Python API mapping, and thin CLI constraints.
 - **Roadmap**: planned-only capabilities and safety requirements.
 
 ## Status Legend
