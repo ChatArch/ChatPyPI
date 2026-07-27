@@ -533,13 +533,17 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / ".github" / "workflows" / "publish.yml").exists()
     assert (project_dir / ".github" / "workflows" / "deploy.yaml").exists()
     assert (project_dir / ".github" / "workflows" / "preview.yaml").exists()
+    assert "site/" in (project_dir / ".gitignore").read_text(encoding="utf-8")
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
     assert '"chatstyle>=0.1.0,<0.2.0"' in pyproject_text
     assert '"chatenv>=0.2.0,<0.3.0"' in pyproject_text
     assert 'requires-python = ">=3.10"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
-    assert 'docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mkdocs-static-i18n>=1.2.0", "mike>=2.0.0"]' in pyproject_text
+    assert (
+        'docs = ["mkdocs>=1.6,<2.0", "mkdocs-material>=9.5,<9.7", '
+        '"mkdocs-static-i18n>=1.2,<2.0", "mike>=2.0,<3.0"]'
+    ) in pyproject_text
     assert 'Homepage = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
     assert 'Repository = "https://github.com/ChatArch/mychat-cli"' in pyproject_text
     assert 'Documentation = "https://arch.gh.wzhecnu.cn/mychat-cli/"' in pyproject_text

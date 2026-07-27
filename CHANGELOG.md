@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6 - 2026-07-27
+
+### Fixed
+
+- Bound ChatArch scaffold docs dependencies so generated packages keep strict MkDocs builds stable across new MkDocs Material releases.
+- Include generated `site/` docs output in scaffold `.gitignore` to avoid committing local MkDocs builds.
+
 ## 0.2.5 - 2026-07-24
 
 ### Added
