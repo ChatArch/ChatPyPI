@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add a top-level `chatpypi --tree` readback path that renders the registered Python package/PyPI helper CLI tree.
+- Make the generated ChatArch scaffold CLI include top-level `--tree` and a default tree smoke test alongside `--help` and `--version`.
+
+### Changed
+
+- Align ChatPyPI's bilingual CLI tree docs and generated ChatArch template docs with the `--tree` contract.
+
 ## 0.2.5 - 2026-07-24
 
 ### Added

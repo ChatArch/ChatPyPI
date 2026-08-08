@@ -22,6 +22,23 @@ def test_help_lists_pypi_commands():
     assert "check" in result.output
     assert "probe" in result.output
     assert "upload" in result.output
+    assert "--tree" in result.output
+
+
+def test_tree_option_prints_registered_pypi_cli_tree():
+    result = CliRunner().invoke(cli, ["--tree"])
+
+    assert result.exit_code == 0, result.output
+    assert "chatpypi  # Python package lifecycle and PyPI operations helpers" in result.output
+    assert "├── --help  # Show help for the current command." in result.output
+    assert "├── --version  # Show package version." in result.output
+    assert "├── --tree  # Print the registered CLI tree." in result.output
+    assert "├── pkg  # Package scaffold/build/check/upload/probe helpers" in result.output
+    assert "│   ├── init [NAME] [--template default|chatarch]" in result.output
+    assert "├── auth  # Authentication, session, and bootstrap helpers" in result.output
+    assert "│   ├── session  # Inspect and manage env-backed PyPI session state" in result.output
+    assert "├── publisher  # Read or manage current-account publisher views" in result.output
+    assert "└── probe [PACKAGE-NAME]" in result.output
 
 
 def test_version_option_reports_package_version():
