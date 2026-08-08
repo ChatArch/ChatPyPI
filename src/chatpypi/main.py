@@ -419,7 +419,10 @@ def _build_chatarch_pyproject_content(
         ]
     )
     if include_mkdocs:
-        lines.append('docs = ["mkdocs>=1.4.0", "mkdocs-material>=9.0.0", "mkdocs-static-i18n>=1.2.0", "mike>=2.0.0"]')
+        lines.append(
+            'docs = ["mkdocs>=1.6,<2.0", "mkdocs-material>=9.5,<9.7", '
+            '"mkdocs-static-i18n>=1.2,<2.0", "mike>=2.0,<3.0"]'
+        )
     lines.extend(
         [
             "",
@@ -1449,6 +1452,7 @@ def scaffold_package(
             .venv/
             build/
             dist/
+            site/
             *.egg-info/
         """).strip()
         + "\n",

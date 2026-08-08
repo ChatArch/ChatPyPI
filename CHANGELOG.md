@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.7 - 2026-08-09
 
 ### Added
 
@@ -10,6 +10,13 @@
 ### Changed
 
 - Align ChatPyPI's bilingual CLI tree docs and generated ChatArch template docs with the `--tree` contract.
+
+## 0.2.6 - 2026-07-27
+
+### Fixed
+
+- Bound ChatArch scaffold docs dependencies so generated packages keep strict MkDocs builds stable across new MkDocs Material releases.
+- Include generated `site/` docs output in scaffold `.gitignore` to avoid committing local MkDocs builds.
 
 ## 0.2.5 - 2026-07-24
 
