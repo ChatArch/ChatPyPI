@@ -579,7 +579,8 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "## 业务命令槽位" in cli_tree_text
     assert "像 ChatTea 的 CLI 树一样" in cli_tree_text
     assert "├── --help" in cli_tree_text
-    assert "└── --version" in cli_tree_text
+    assert "├── --version" in cli_tree_text
+    assert "└── --tree" in cli_tree_text
     capability_text = (project_dir / "docs" / "capability-map.md").read_text(encoding="utf-8")
     assert "# 能力地图" in capability_text
     assert "不生成计划类占位页" in capability_text
@@ -609,6 +610,8 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / "src" / "mychat_cli" / "config.py").exists()
     assert "from mychat_cli import __version__" in cli_text
     assert '@click.version_option(__version__, prog_name="mychat_cli")' in cli_text
+    assert 'click.option("--tree"' in cli_text
+    assert "_render_cli_tree" in cli_text
     assert "HELLO_SCHEMA" not in cli_text
     assert "def hello" not in cli_text
     assert "Hello, ChatArch" not in cli_text
@@ -616,6 +619,8 @@ def test_chatpypi_init_chatarch_template(tmp_path):
         encoding="utf-8"
     )
     assert "test_version_option_reports_package_version" in generated_test_text
+    assert "test_tree_option_prints_registered_cli_tree" in generated_test_text
+    assert "└── --tree" in generated_test_text
     assert "test_hello" not in generated_test_text
     assert "Hello, ChatArch" not in generated_test_text
     readme_text = (project_dir / "README.md").read_text(encoding="utf-8")

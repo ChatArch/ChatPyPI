@@ -8,21 +8,26 @@
 
 ```text
 chatpypi                  # Python 包生命周期与 PyPI 操作入口
+├── --help                # 显示当前命令帮助
+├── --version             # 输出当前包版本
+├── --tree                # 输出真实已注册 CLI 树
+├── pkg                   # 包模板、构建、校验、上传和探测
+├── auth                  # 登录态、账号和人工 checkpoint 流程
+├── profile               # 规划：本地 ChatPyPI profile 管理
+├── config                # 规划：本地配置键值管理
+├── project               # 读取当前登录账号的 PyPI project 视图
+├── publisher             # 读取或配置 Trusted Publisher
+├── token                 # 规划 / checkpoint：PyPI API token 管理
+├── doctor                # 本地配置、session 和安全边界检查
+├── docs                  # 输出文档链接和示例命令
 ├── init                  # 兼容快捷入口：创建 src-layout Python 包
 ├── build                 # 兼容快捷入口：构建 wheel / sdist
 ├── check                 # 兼容快捷入口：校验 dist
 ├── upload                # 兼容快捷入口：上传 dist
-├── probe                 # 兼容快捷入口：检查 PyPI 包名是否可用
-├── pkg                   # 包模板、构建、校验、上传和探测
-├── auth                  # 登录态、账号和人工 checkpoint 流程
-├── project               # 读取当前登录账号的 PyPI project 视图
-├── publisher             # 读取或配置 Trusted Publisher
-├── profile               # 规划：本地 ChatPyPI profile 管理
-├── config                # 规划：本地配置键值管理
-├── token                 # 规划 / checkpoint：PyPI API token 管理
-├── doctor                # 本地配置、session 和安全边界检查
-└── docs                  # 输出文档链接和示例命令
+└── probe                 # 兼容快捷入口：检查 PyPI 包名是否可用
 ```
+
+运行 `chatpypi --tree` 可回读真实注册树；`pkg init -t chatarch` 生成的新包也包含顶层 `--tree`。
 
 ## 包生命周期
 

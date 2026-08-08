@@ -758,17 +758,94 @@ def _build_chatarch_cli_py(module_name: str) -> str:
             f"""
             \"\"\"CLI entrypoint for {module_name}.\"\"\"
 
+            from __future__ import annotations
+
+            import inspect
+
             import click
 
             from {module_name} import __version__
 
 
-            @click.group()
+            def _purpose(command: click.Command) -> str:
+                text = command.short_help or inspect.getdoc(command.callback) or ""
+                return " ".join(text.strip().split()).rstrip(".")
+
+
+            def _parameter_piece(parameter: click.Parameter) -> str | None:
+                if getattr(parameter, "hidden", False) or parameter.name == "help":
+                    return None
+                if isinstance(parameter, click.Argument):
+                    piece = parameter.name.upper().replace("_", "-")
+                    if not parameter.required:
+                        piece = f"[{{piece}}]"
+                    if parameter.nargs == -1:
+                        piece = f"{{piece}}..."
+                    return piece
+                if not isinstance(parameter, click.Option):
+                    return None
+                option_names = [name for name in (*parameter.opts, *parameter.secondary_opts) if name.startswith("--")]
+                if not option_names:
+                    option_names = [name for name in (*parameter.opts, *parameter.secondary_opts) if name.startswith("-")]
+                if not option_names:
+                    return None
+                if parameter.is_flag or parameter.flag_value is not None:
+                    piece = "/".join(option_names)
+                else:
+                    metavar = parameter.metavar or parameter.name.upper().replace("_", "-")
+                    piece = f"{{'/'.join(option_names)}} {{metavar}}"
+                if not parameter.required:
+                    piece = f"[{{piece}}]"
+                return piece
+
+
+            def _command_signature(name: str, command: click.Command) -> str:
+                pieces = [piece for piece in (_parameter_piece(parameter) for parameter in command.params) if piece]
+                return " ".join([name, *pieces])
+
+
+            def _render_command_tree(command: click.Command, name: str, prefix: str, is_last: bool, lines: list[str]) -> None:
+                connector = "└── " if is_last else "├── "
+                line = f"{{prefix}}{{connector}}{{_command_signature(name, command)}}"
+                purpose = _purpose(command)
+                if purpose:
+                    line = f"{{line}}  # {{purpose}}"
+                lines.append(line)
+                if not isinstance(command, click.Group):
+                    return
+                children = [(child_name, child) for child_name, child in command.commands.items() if not child.hidden]
+                child_prefix = prefix + ("    " if is_last else "│   ")
+                for index, (child_name, child) in enumerate(children):
+                    _render_command_tree(child, child_name, child_prefix, index == len(children) - 1, lines)
+
+
+            def _render_cli_tree(root: click.Group) -> str:
+                children = [(name, command) for name, command in root.commands.items() if not command.hidden]
+                lines = [f"{module_name}  # {{_purpose(root)}}"]
+                root_options = [
+                    ("--help", "Show help for the current command."),
+                    ("--version", "Show package version."),
+                    ("--tree", "Print the registered CLI tree."),
+                ]
+                for index, (option, purpose) in enumerate(root_options):
+                    is_last = not children and index == len(root_options) - 1
+                    lines.append(f"{{'└──' if is_last else '├──'}} {{option}}  # {{purpose}}")
+                for index, (child_name, child) in enumerate(children):
+                    _render_command_tree(child, child_name, "", index == len(children) - 1, lines)
+                return "\\n".join(lines)
+
+
+            @click.group(invoke_without_command=True, no_args_is_help=True)
             @click.version_option(__version__, prog_name="{module_name}")
-            def main() -> None:
+            @click.option("--tree", "show_tree", is_flag=True, is_eager=True, help="Print the registered CLI tree.")
+            @click.pass_context
+            def main(ctx: click.Context, show_tree: bool) -> None:
                 \"\"\"{module_name} command line interface.\"\"\"
                 # Add package-specific commands here. Prefer ChatStyle helpers for
                 # interactive input when a command needs recoverable user input.
+                if show_tree:
+                    click.echo(_render_cli_tree(ctx.command))
+                    ctx.exit()
 
 
             if __name__ == "__main__":
@@ -794,6 +871,16 @@ def _build_chatarch_test_cli_py(module_name: str) -> str:
 
                 assert result.exit_code == 0
                 assert f"{module_name}, version {{__version__}}" in result.output
+
+
+            def test_tree_option_prints_registered_cli_tree():
+                result = CliRunner().invoke(main, ["--tree"])
+
+                assert result.exit_code == 0, result.output
+                assert "{module_name}  # {module_name} command line interface" in result.output
+                assert "├── --help  # Show help for the current command." in result.output
+                assert "├── --version  # Show package version." in result.output
+                assert "└── --tree  # Print the registered CLI tree." in result.output
             """
         ).strip()
         + "\n"
@@ -957,7 +1044,8 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
             ```text
             {module_name}                  # {package_name} 命令行入口
             ├── --help                     # 显示 CLI 帮助和已注册命令
-            └── --version                  # 输出当前包版本
+            ├── --version                  # 输出当前包版本
+            └── --tree                     # 输出真实已注册 CLI 树
             ```
 
             ## 基础入口
@@ -965,9 +1053,10 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
             ```text
             {module_name} --help           # 验证命令已安装，并查看当前命令树
             {module_name} --version        # 验证当前安装版本
+            {module_name} --tree           # 回读真实 CLI contract
             ```
 
-            `--help` 和 `--version` 是模板默认可验证入口。新增业务命令后，应像 ChatTea 的 CLI 树一样，把命令组单独展开，并给每个命令写一行注释。
+            `--help`、`--version` 和 `--tree` 是模板默认可验证入口。新增业务命令后，应像 ChatTea 的 CLI 树一样，把命令组单独展开，并给每个命令写一行注释。
 
             ## 业务命令槽位
 
@@ -1013,7 +1102,8 @@ def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str
             ```text
             {module_name}                  # {package_name} command-line entry
             ├── --help                     # Show CLI help and registered commands
-            └── --version                  # Print the current package version
+            ├── --version                  # Print the current package version
+            └── --tree                     # Print the actual registered CLI tree
             ```
 
             ## Base Entries
@@ -1021,9 +1111,10 @@ def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str
             ```text
             {module_name} --help           # Verify the command is installed and inspect the current command tree
             {module_name} --version        # Verify the installed version
+            {module_name} --tree           # Read back the actual CLI contract
             ```
 
-            `--help` and `--version` are the scaffolded verification entries. After adding business commands, follow the ChatTea CLI tree pattern: split command groups into their own sections and annotate every command line.
+            `--help`, `--version`, and `--tree` are the scaffolded verification entries. After adding business commands, follow the ChatTea CLI tree pattern: split command groups into their own sections and annotate every command line.
 
             ## Business Command Slots
 
