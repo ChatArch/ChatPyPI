@@ -22,18 +22,19 @@ chatpypi pkg upload --project-dir ./my-package --token-env PYPI_API_TOKEN
 
 ```bash
 chatpypi auth login --username <user> --password-env PYPI_PASSWORD
+chatenv token refresh PyPI <profile>
 chatpypi auth whoami
 chatpypi auth session show
 chatpypi project list
 ```
 
-登录态通过 ChatEnv token store 的 `tokens/PyPI/<profile>.json` 管理，并与 ChatEnv `pypi` env profile 一一对应。报告和日志中不得输出 session token、cookie 或密码。
+登录态通过 ChatEnv token store 的 `tokens/PyPI/<profile>.json` 管理，并与 ChatEnv `pypi` env profile 一一对应。`chatpypi auth login` 是 ChatPyPI 原生命令；安装 ChatPyPI 后也会注册 `chatenv.token_refreshers`，因此 `chatenv token refresh PyPI <profile>` 会调用 ChatPyPI 的 PyPI 登录逻辑，从 matching stable profile 读取 `PYPI_USERNAME`、`PYPI_PASSWORD` 和可选 `PYPI_TOTP_SECRET` 后刷新 runtime session。报告和日志中不得输出 session token、cookie 或密码。
 
 ## 已实现：Trusted Publisher 辅助
 
 ```bash
-chatpypi publisher list <project>
-chatpypi publisher detail <project> <publisher-id>
+chatpypi publisher list
+chatpypi publisher detail <project>
 chatpypi publisher add-github <project> --owner <owner> --repo <repo> --workflow publish.yml
 ```
 

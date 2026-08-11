@@ -12,7 +12,7 @@ from chatpypi.config import (
 
 
 def test_version_present():
-    assert __version__ == "0.2.8"
+    assert __version__ == "0.2.9"
 
 
 def test_public_package_api_exports_core_helpers(tmp_path):
@@ -55,6 +55,7 @@ def test_runtime_dependencies_include_build_and_twine():
     assert '"build>=1.2.0,<2.0.0"' in text
     assert '"twine>=6.0.0,<7.0.0"' in text
     assert '"requests>=2.31.0,<3.0.0"' in text
+    assert '"chatenv>=0.2.7,<0.3.0"' in text
 
 
 def test_chatenv_provider_entry_point_declared():
@@ -63,6 +64,8 @@ def test_chatenv_provider_entry_point_declared():
 
     assert '[project.entry-points."chatenv.configs"]' in text
     assert 'pypi = "chatpypi.config"' in text
+    assert '[project.entry-points."chatenv.token_refreshers"]' in text
+    assert 'PyPI = "chatpypi.session_ops:refresh_chatenv_token"' in text
 
 
 def test_chatenv_pypi_config_schema():

@@ -132,9 +132,9 @@ chatenv new -t pypi default
 
 - 登录后读取 / session 复用：
   - `PYPI_USERNAME`：PyPI 用户名，用于 `chatpypi auth login`
-  - `PYPI_PASSWORD`：PyPI 密码，只通过 `--password-env` 读取，不直接作为命令行值传入
+  - `PYPI_PASSWORD`：PyPI 密码，只通过 `--password-env` 或 matching ChatEnv refresh provider 读取，不直接作为命令行值传入
   - `PYPI_TOTP_SECRET`：可选 TOTP secret，用于自动完成 2FA checkpoint
-  - Web 登录态 session：`chatpypi auth login` 生成/刷新到 `tokens/PyPI/<profile>.json`，与 `envs/PyPI/<profile>.env` 一一对应
+  - Web 登录态 session：`chatpypi auth login` 或 `chatenv token refresh PyPI <profile>` 生成/刷新到 `tokens/PyPI/<profile>.json`，与 `envs/PyPI/<profile>.env` 一一对应
 - 手动发布：
   - `PYPI_API_TOKEN`：PyPI API token，配合 `chatpypi pkg upload --token-env PYPI_API_TOKEN`
 
