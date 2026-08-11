@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.9 - 2026-08-11
+
+### Fixed
+
+- Require `chatenv>=0.2.6,<0.3.0` and reject invalid PyPI token profile names before token-store read/write/clear operations.
+- Scope the account-level active Publisher link fallback to the `Projects with active publishers` section so unrelated project publishing links do not count as active publishers.
+- Correct the Trusted Publisher flow docs to match the live CLI: `publisher list` takes no project argument and `publisher detail` takes exactly one project argument.
+
 ## 0.2.8 - 2026-08-11
 
 ### Changed

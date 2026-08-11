@@ -19,6 +19,7 @@ from urllib.parse import urljoin
 
 import requests
 from chatenv import TokenStore
+from chatenv.tokens import normalize_token_profile
 
 DEFAULT_BASE_URL = "https://pypi.org"
 SERVICE_NAME = "PyPI"
@@ -181,6 +182,50 @@ class SectionTableParser(HTMLParser):
             self.sections.append((self._current_heading, self._current_rows))
             self._in_table = False
             self._current_rows = []
+
+
+class ActiveProjectLinkParser(HTMLParser):
+    """Collect account-overview project links only from the active-publishers section."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[tuple[str, str]] = []
+        self._in_active_section = False
+        self._collecting_heading: str | None = None
+        self._heading_parts: list[str] = []
+        self._current_href: str | None = None
+        self._current_link_text: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"h1", "h2", "h3", "h4"}:
+            self._collecting_heading = tag
+            self._heading_parts = []
+            return
+        if tag == "a" and self._in_active_section:
+            attrs_dict = dict(attrs)
+            self._current_href = attrs_dict.get("href")
+            self._current_link_text = []
+
+    def handle_data(self, data: str) -> None:
+        text = " ".join(data.split())
+        if not text:
+            return
+        if self._collecting_heading is not None:
+            self._heading_parts.append(text)
+        if self._current_href is not None:
+            self._current_link_text.append(text)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == self._collecting_heading:
+            heading = " ".join(self._heading_parts).strip().lower()
+            self._in_active_section = "projects with active publishers" in heading
+            self._collecting_heading = None
+            self._heading_parts = []
+            return
+        if tag == "a" and self._current_href is not None:
+            self.links.append((self._current_href, " ".join(self._current_link_text).strip()))
+            self._current_href = None
+            self._current_link_text = []
 
 
 def parse_forms(html: str) -> list[HtmlForm]:
@@ -346,7 +391,10 @@ def _token_store(home: str | Path | None = None) -> TokenStore:
 
 
 def session_token_profile(env_profile: str | None = None) -> str:
-    return env_profile or "default"
+    try:
+        return normalize_token_profile(env_profile)
+    except ValueError as exc:
+        raise PyPISessionError(f"Invalid PyPI token profile: {exc}") from exc
 
 
 def save_session_payload_to_token_store(
@@ -725,10 +773,10 @@ def _active_project_link_records(html: str) -> list[dict[str, Any]]:
     "Projects with active publishers" overview as project links rather than a
     table. Project-level pages still expose provider/repository/workflow detail
     via tables, so this fallback intentionally records only the active project
-    names found in account overview links.
+    names found under that account overview section.
     """
 
-    parser = TextLinkParser()
+    parser = ActiveProjectLinkParser()
     parser.feed(html)
     seen: set[str] = set()
     records: list[dict[str, Any]] = []

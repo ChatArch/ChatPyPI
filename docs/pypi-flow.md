@@ -32,8 +32,8 @@ chatpypi project list
 ## 已实现：Trusted Publisher 辅助
 
 ```bash
-chatpypi publisher list <project>
-chatpypi publisher detail <project> <publisher-id>
+chatpypi publisher list
+chatpypi publisher detail <project>
 chatpypi publisher add-github <project> --owner <owner> --repo <repo> --workflow publish.yml
 ```
 

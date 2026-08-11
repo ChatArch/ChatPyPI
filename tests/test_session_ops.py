@@ -102,6 +102,25 @@ def test_parse_account_publishing_page_active_project_links():
     assert payload["active_publishers"][0]["fields"] == {"Project": "ChatEnv"}
 
 
+def test_parse_account_publishing_page_ignores_unrelated_project_links():
+    html = """
+    <html><body>
+      <h2>Manage projects</h2>
+      <a href="/manage/project/NavOnly/settings/publishing/">NavOnly</a>
+      <h3>Projects with active publishers</h3>
+      <a href="/manage/project/ChatEnv/settings/publishing/">ChatEnv</a>
+      <h3>Pending publishers</h3>
+      <a href="/manage/project/PendingOnly/settings/publishing/">PendingOnly</a>
+      <p>No pending publishers are currently configured.</p>
+    </body></html>
+    """
+
+    payload = session_ops.parse_publishing_page(html)
+
+    assert payload["active_count"] == 1
+    assert [item["project"] for item in payload["active_publishers"]] == ["ChatEnv"]
+
+
 def test_publisher_detail_matching_finds_exact_github_target():
     html = """
     <html><body>
@@ -201,6 +220,20 @@ def test_session_loader_does_not_fallback_to_legacy_process_env(monkeypatch, tmp
 
     with pytest.raises(session_ops.PyPISessionError, match="tokens/PyPI/default.json"):
         session_ops.load_session_payload_from_env(home=tmp_path / "home")
+
+
+def test_session_token_profile_rejects_aliasing_names_before_store_access(tmp_path):
+    status = session_ops.save_session_payload_to_token_store(
+        {"provider": "pypi", "username": "Profile", "base_url": "https://pypi.org", "cookies": []},
+        env_profile="RexWzh",
+        home=tmp_path / "home",
+        source="test",
+    )
+
+    assert status["profile"] == "RexWzh"
+    for profile in ["", ".", "..", "../RexWzh", "RexWzh/other", " RexWzh", "RexWzh."]:
+        with pytest.raises(session_ops.PyPISessionError, match="Invalid PyPI token profile"):
+            session_ops.session_token_store_status(env_profile=profile, home=tmp_path / "home")
 
 
 def test_build_and_reload_session_payload(tmp_path):
