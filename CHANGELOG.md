@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- Require `chatenv>=0.2.6,<0.3.0` and reject invalid PyPI token profile names before token-store read/write/clear operations.
+- Require `chatenv>=0.2.7,<0.3.0` and reject invalid PyPI token profile names before token-store read/write/clear operations.
+- Register a `chatenv.token_refreshers` provider so `chatenv token refresh PyPI <profile>` refreshes the PyPI web session from the matching stable ChatEnv profile instead of requiring manual token JSON.
 - Scope the account-level active Publisher link fallback to the `Projects with active publishers` section so unrelated project publishing links do not count as active publishers.
 - Correct the Trusted Publisher flow docs to match the live CLI: `publisher list` takes no project argument and `publisher detail` takes exactly one project argument.
 

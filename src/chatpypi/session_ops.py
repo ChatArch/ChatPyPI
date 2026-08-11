@@ -18,7 +18,9 @@ from typing import Any
 from urllib.parse import urljoin
 
 import requests
-from chatenv import TokenStore
+from chatenv import TokenRefreshResult, TokenStore
+from chatenv.paths import get_paths
+from chatenv.store import EnvStore
 from chatenv.tokens import normalize_token_profile
 
 DEFAULT_BASE_URL = "https://pypi.org"
@@ -395,6 +397,75 @@ def session_token_profile(env_profile: str | None = None) -> str:
         return normalize_token_profile(env_profile)
     except ValueError as exc:
         raise PyPISessionError(f"Invalid PyPI token profile: {exc}") from exc
+
+
+def _load_refresh_profile_values(
+    profile: str,
+    *,
+    home: str | Path | None = None,
+    env_store: EnvStore | None = None,
+) -> dict[str, str]:
+    """Load the stable PyPI env profile paired with a runtime token profile."""
+
+    from chatpypi.config import PyPIConfig
+
+    store = env_store or EnvStore(get_paths(home).envs_dir)
+    try:
+        profile_path = (
+            store.active_path(PyPIConfig)
+            if profile == "default"
+            else store.profile_path(PyPIConfig, profile)
+        )
+    except ValueError as exc:
+        raise ValueError(f"PyPI ChatEnv profile not found or invalid: {profile}") from exc
+    if not profile_path.exists():
+        raise ValueError(f"PyPI ChatEnv profile not found or invalid: {profile}")
+    return store.load_path(profile_path)
+
+
+def _required_profile_value(values: dict[str, str], key: str, *, profile: str) -> str:
+    value = values.get(key)
+    if value is None or not str(value).strip():
+        raise ValueError(f"PyPI ChatEnv profile {profile} is missing {key}")
+    return str(value)
+
+
+def refresh_chatenv_token(
+    *,
+    service: str,
+    profile: str,
+    home: str | Path | None = None,
+    env_store: EnvStore | None = None,
+    token_store: TokenStore | None = None,
+) -> TokenRefreshResult:
+    """Refresh PyPI web-session runtime state for ChatEnv's provider hook.
+
+    ChatEnv calls this through the ``chatenv.token_refreshers`` entry-point
+    group. ChatPyPI owns the PyPI login semantics; ChatEnv owns the eventual
+    token-store write and safe status rendering.
+    """
+
+    del service, token_store  # ChatEnv already selected the provider/store.
+    profile_name = session_token_profile(profile)
+    profile_values = _load_refresh_profile_values(profile_name, home=home, env_store=env_store)
+    username = _required_profile_value(profile_values, "PYPI_USERNAME", profile=profile_name)
+    password = _required_profile_value(profile_values, "PYPI_PASSWORD", profile=profile_name)
+    totp_secret = profile_values.get("PYPI_TOTP_SECRET") or None
+    try:
+        payload, _session_token = login_to_pypi(
+            username=username,
+            password=password,
+            totp_secret=totp_secret,
+            base_url=DEFAULT_BASE_URL,
+            timeout=20.0,
+        )
+    except PyPISessionError as exc:
+        raise ValueError(str(exc)) from exc
+    return TokenRefreshResult(
+        values={"payload": payload},
+        token_type=SESSION_TOKEN_TYPE,
+        summary=_session_summary_for_store(payload),
+    )
 
 
 def save_session_payload_to_token_store(
@@ -1161,6 +1232,7 @@ __all__ = [
     "publisher_detail_from_payload",
     "remove_pending_github_publisher_from_payload",
     "requests_session_from_payload",
+    "refresh_chatenv_token",
     "save_session_payload",
     "totp_now",
     "validate_session_payload",

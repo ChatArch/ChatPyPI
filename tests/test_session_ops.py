@@ -3,8 +3,10 @@ import json
 
 import pytest
 import requests
+from chatenv.store import EnvStore
 
 from chatpypi import session_ops
+from chatpypi.config import PyPIConfig
 
 
 def test_totp_now_matches_rfc_6238_vector(monkeypatch):
@@ -234,6 +236,81 @@ def test_session_token_profile_rejects_aliasing_names_before_store_access(tmp_pa
     for profile in ["", ".", "..", "../RexWzh", "RexWzh/other", " RexWzh", "RexWzh."]:
         with pytest.raises(session_ops.PyPISessionError, match="Invalid PyPI token profile"):
             session_ops.session_token_store_status(env_profile=profile, home=tmp_path / "home")
+
+
+def test_refresh_chatenv_token_uses_matching_stable_profile_without_writing_store(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    env_store = EnvStore(home / "envs")
+    env_store.save_profile(
+        PyPIConfig,
+        "RexWzh",
+        {
+            "PYPI_USERNAME": "profile-user",
+            "PYPI_PASSWORD": "profile-password",
+            "PYPI_TOTP_SECRET": "JBSWY3DPEHPK3PXP",
+        },
+    )
+    captured: dict[str, object] = {}
+
+    def fake_login_to_pypi(**kwargs):
+        captured.update(kwargs)
+        return {
+            "provider": "pypi",
+            "username": kwargs["username"],
+            "base_url": kwargs["base_url"],
+            "cookies": [{"name": "session_id", "value": "opaque-cookie-fixture"}],
+            "csrf": {"last_seen_token": "opaque-csrf-fixture"},
+            "meta": {"email_verified": True, "two_factor_enabled": True},
+        }, "serialized-session-must-not-be-stored-by-provider"
+
+    monkeypatch.setattr(session_ops, "login_to_pypi", fake_login_to_pypi)
+
+    result = session_ops.refresh_chatenv_token(
+        service="PyPI",
+        profile="RexWzh",
+        home=home,
+        env_store=env_store,
+        token_store=None,
+    )
+
+    assert captured == {
+        "username": "profile-user",
+        "password": "profile-password",
+        "totp_secret": "JBSWY3DPEHPK3PXP",
+        "base_url": "https://pypi.org",
+        "timeout": 20.0,
+    }
+    assert result.token_type == "web_session"
+    assert result.values["payload"]["cookies"][0]["value"] == "opaque-cookie-fixture"
+    assert result.summary == {
+        "provider": "pypi",
+        "username": "profile-user",
+        "base_url": "https://pypi.org",
+        "cookie_count": 1,
+        "has_last_seen_csrf": True,
+        "email_verified": True,
+        "two_factor_enabled": True,
+    }
+    assert not (home / "tokens" / "PyPI" / "RexWzh.json").exists()
+
+
+def test_refresh_chatenv_token_fails_cleanly_for_missing_profile(tmp_path):
+    with pytest.raises(ValueError, match="PyPI ChatEnv profile not found or invalid: Missing"):
+        session_ops.refresh_chatenv_token(service="PyPI", profile="Missing", home=tmp_path / "home")
+
+
+def test_refresh_chatenv_token_requires_profile_credentials(tmp_path):
+    home = tmp_path / "home"
+    env_store = EnvStore(home / "envs")
+    env_store.save_profile(PyPIConfig, "NoPassword", {"PYPI_USERNAME": "profile-user"})
+
+    with pytest.raises(ValueError, match="PyPI ChatEnv profile NoPassword is missing PYPI_PASSWORD"):
+        session_ops.refresh_chatenv_token(
+            service="PyPI",
+            profile="NoPassword",
+            home=home,
+            env_store=env_store,
+        )
 
 
 def test_build_and_reload_session_payload(tmp_path):
