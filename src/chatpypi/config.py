@@ -12,9 +12,6 @@ from chatenv.store import EnvStore
 BaseEnvConfig: Any = _BaseEnvConfig
 EnvField: Any = _EnvField
 
-SESSION_TOKEN_ENV = "PYPI_SESSION_TOKEN"
-
-
 class PyPIConfig(BaseEnvConfig):
     """PyPI account/session configuration for ChatPyPI."""
 
@@ -105,17 +102,7 @@ setattr(
     "PYPI_TOTP_SECRET",
     EnvField("PYPI_TOTP_SECRET", desc="PyPI TOTP seed/secret", is_sensitive=True),
 )
-setattr(
-    PyPIConfig,
-    "PYPI_SESSION_TOKEN",
-    EnvField(
-        "PYPI_SESSION_TOKEN",
-        desc="Serialized PyPI web session token captured by chatpypi auth login",
-        is_sensitive=True,
-    ),
-)
 __all__ = [
-    "SESSION_TOKEN_ENV",
     "PyPIConfig",
     "load_active_pypi_env",
     "load_pypi_env_profile",

@@ -8,7 +8,9 @@ import sys
 import os
 
 from chatpypi.cli import cli
-from chatpypi.session_ops import encode_session_token
+from chatenv import TokenStore
+
+from chatpypi.session_ops import encode_session_token, save_session_payload_to_token_store
 
 
 pytestmark = [pytest.mark.e2e]
@@ -221,36 +223,37 @@ def test_chatpypi_pkg_upload_uses_token_env(tmp_path):
     assert "demo-token-value" not in upload.output
 
 
-def test_chatpypi_auth_session_show_uses_env_session_token(tmp_path):
+def test_chatpypi_auth_session_show_uses_chatenv_token_store(tmp_path, monkeypatch):
     runner = CliRunner()
     session_file = tmp_path / "pypi-session.json"
     _write_session_file(session_file)
-    token = encode_session_token(json.loads(session_file.read_text(encoding="utf-8")))
+    monkeypatch.setenv("CHATARCH_HOME", str(tmp_path / "home"))
+    save_session_payload_to_token_store(json.loads(session_file.read_text(encoding="utf-8")))
 
     result = runner.invoke(
         cli,
         ["auth", "session", "show", "--format", "json"],
-        env={"PYPI_SESSION_TOKEN": token},
     )
 
     assert result.exit_code == 0
-    assert '"source": "PYPI_SESSION_TOKEN"' in result.output
+    assert '"source": "ChatEnv token store"' in result.output
     assert '"username": "LooKeng"' in result.output
     assert '"cookie_count": 1' in result.output
     assert '"has_last_seen_csrf": true' in result.output
 
 
-def test_chatpypi_auth_session_show_rejects_bad_token(tmp_path):
+def test_chatpypi_auth_session_show_rejects_bad_token_store_payload(tmp_path, monkeypatch):
     runner = CliRunner()
+    monkeypatch.setenv("CHATARCH_HOME", str(tmp_path / "home"))
+    TokenStore().write("PyPI", values={"payload": "not-a-session-payload"}, token_type="web_session")
 
     result = runner.invoke(
         cli,
         ["auth", "session", "show"],
-        env={"PYPI_SESSION_TOKEN": "not-a-valid-token"},
     )
 
     assert result.exit_code != 0
-    assert "PYPI_SESSION_TOKEN is not a valid ChatPyPI session token" in result.output
+    assert "PyPI token store payload is not a valid session object" in result.output
 
 
 def test_planned_operational_commands_fail_nonzero():
@@ -261,7 +264,8 @@ def test_planned_operational_commands_fail_nonzero():
 
 
 def test_chatpypi_auth_login_writes_real_session_via_login_helper(tmp_path, monkeypatch):
-    env_file = tmp_path / "envs" / "PyPI" / ".env"
+    token_file = tmp_path / "home" / "tokens" / "PyPI" / "default.json"
+    monkeypatch.setenv("CHATARCH_HOME", str(tmp_path / "home"))
 
     def fake_login(**kwargs):
         assert kwargs["username"] == "LooKeng"
@@ -279,7 +283,6 @@ def test_chatpypi_auth_login_writes_real_session_via_login_helper(tmp_path, monk
         return payload, encode_session_token(payload)
 
     monkeypatch.setattr("chatpypi.cli.login_to_pypi", fake_login)
-    monkeypatch.setattr("chatpypi.cli.save_active_pypi_env_value", lambda key, value: env_file)
 
     result = CliRunner().invoke(
         cli,
@@ -300,14 +303,15 @@ def test_chatpypi_auth_login_writes_real_session_via_login_helper(tmp_path, monk
 
     assert result.exit_code == 0
     assert '"authenticated": true' in result.output
-    assert '"env_key": "PYPI_SESSION_TOKEN"' in result.output
+    assert '"token_profile": "default"' in result.output
     assert '"username": "LooKeng"' in result.output
+    assert token_file.exists()
     assert "demo-password" not in result.output
     assert "demo-totp" not in result.output
 
 
 def test_chatpypi_auth_login_env_profile_prefers_profile_values(monkeypatch, tmp_path):
-    written = tmp_path / "RexWzh.env"
+    monkeypatch.setenv("CHATARCH_HOME", str(tmp_path / "home"))
 
     def fake_login(**kwargs):
         assert kwargs["username"] == "RexWzh"
@@ -331,11 +335,6 @@ def test_chatpypi_auth_login_env_profile_prefers_profile_values(monkeypatch, tmp
             "PYPI_TOTP_SECRET": "profile-totp",
         },
     )
-    monkeypatch.setattr(
-        "chatpypi.cli.save_pypi_env_profile_value",
-        lambda profile, key, value: written,
-    )
-
     result = CliRunner().invoke(
         cli,
         ["auth", "login", "-e", "RexWzh", "--format", "json"],
@@ -348,7 +347,9 @@ def test_chatpypi_auth_login_env_profile_prefers_profile_values(monkeypatch, tmp
 
     assert result.exit_code == 0
     assert '"env_profile": "RexWzh"' in result.output
+    assert '"token_profile": "RexWzh"' in result.output
     assert '"username": "RexWzh"' in result.output
+    assert (tmp_path / "home" / "tokens" / "PyPI" / "RexWzh.json").exists()
     assert "process-password" not in result.output
     assert "profile-password" not in result.output
 
@@ -381,17 +382,14 @@ def test_chatpypi_project_and_publisher_lists_call_real_session_helpers(tmp_path
     project_result = CliRunner().invoke(
         cli,
         ["project", "list", "--format", "json"],
-        env={"PYPI_SESSION_TOKEN": "encoded"},
     )
     publisher_result = CliRunner().invoke(
         cli,
         ["publisher", "list", "--format", "json"],
-        env={"PYPI_SESSION_TOKEN": "encoded"},
     )
     pending_result = CliRunner().invoke(
         cli,
         ["publisher", "pending-list", "--format", "json"],
-        env={"PYPI_SESSION_TOKEN": "encoded"},
     )
 
     assert project_result.exit_code == 0
@@ -438,7 +436,7 @@ def test_chatpypi_env_profile_does_not_use_process_session_token(monkeypatch):
 def test_chatpypi_doctor_check_verifies_session_token(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "chatpypi.cli.load_session_payload_from_env",
-        lambda token=None, token_env="PYPI_SESSION_TOKEN", env_profile=None: {"cookies": [{"name": "session_id", "value": "masked"}]},
+        lambda token=None, token_env="PYPI_SESSION_TOKEN", env_profile=None, home=None: {"cookies": [{"name": "session_id", "value": "masked"}]},
     )
     monkeypatch.setattr(
         "chatpypi.cli.validate_session_payload",
@@ -451,7 +449,6 @@ def test_chatpypi_doctor_check_verifies_session_token(tmp_path, monkeypatch):
     result = CliRunner().invoke(
         cli,
         ["doctor", "check", "--format", "json"],
-        env={"PYPI_SESSION_TOKEN": "encoded"},
     )
 
     assert result.exit_code == 0

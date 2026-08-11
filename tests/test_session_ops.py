@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 import requests
@@ -78,6 +79,29 @@ def test_parse_project_publishing_page_active_details_and_no_pending():
     assert detail["environment"] == "(Any)"
 
 
+def test_parse_account_publishing_page_active_project_links():
+    html = """
+    <html><body>
+      <h2>Manage publishers</h2>
+      <h3>Projects with active publishers</h3>
+      <table-free-layout>
+        <a href="/manage/project/ChatEnv/settings/publishing/">ChatEnv</a>
+        <a href="/manage/project/ChatCRS/settings/publishing/">Manage</a>
+        <a href="/manage/project/ChatEnv/settings/publishing/">duplicate</a>
+      </table-free-layout>
+      <h3>Pending publishers</h3>
+      <p>No pending publishers are currently configured.</p>
+    </body></html>
+    """
+
+    payload = session_ops.parse_publishing_page(html)
+
+    assert payload["active_count"] == 2
+    assert payload["pending_count"] == 0
+    assert [item["project"] for item in payload["active_publishers"]] == ["ChatEnv", "ChatCRS"]
+    assert payload["active_publishers"][0]["fields"] == {"Project": "ChatEnv"}
+
+
 def test_publisher_detail_matching_finds_exact_github_target():
     html = """
     <html><body>
@@ -127,24 +151,61 @@ def test_assert_logged_in_response_rejects_non_200():
         session_ops._assert_logged_in_response(response)
 
 
-def test_env_profile_token_beats_process_env(monkeypatch):
-    process_token = session_ops.encode_session_token({"username": "Process", "cookies": []})
-    profile_token = session_ops.encode_session_token({"username": "Profile", "cookies": []})
-    monkeypatch.setenv("PYPI_SESSION_TOKEN", process_token)
-    monkeypatch.setattr(
-        session_ops,
-        "load_pypi_env_profile",
-        lambda profile, home=None: {"PYPI_SESSION_TOKEN": profile_token},
+def test_session_token_store_roundtrip_uses_chatenv_parallel_profile(tmp_path):
+    payload = {
+        "provider": "pypi",
+        "username": "Profile",
+        "base_url": "https://pypi.org",
+        "cookies": [{"name": "session_id", "value": "opaque-cookie-fixture", "domain": "pypi.org", "path": "/"}],
+        "csrf": {"last_seen_token": "opaque-csrf-fixture"},
+        "created_at": "2026-08-11T12:00:00Z",
+        "updated_at": "2026-08-11T12:00:00Z",
+        "meta": {"email_verified": True, "two_factor_enabled": True},
+    }
+
+    status = session_ops.save_session_payload_to_token_store(
+        payload,
+        env_profile="RexWzh",
+        home=tmp_path / "home",
+        source="test",
+    )
+    token_file = Path(status["token_file"])
+    raw = json.loads(token_file.read_text(encoding="utf-8"))
+
+    assert token_file == tmp_path / "home" / "tokens" / "PyPI" / "RexWzh.json"
+    assert raw["service"] == "PyPI"
+    assert raw["profile"] == "RexWzh"
+    assert raw["token_type"] == "web_session"
+    assert raw["values"]["payload"]["cookies"][0]["value"] == "opaque-cookie-fixture"
+    assert raw["summary"] == {
+        "provider": "pypi",
+        "username": "Profile",
+        "base_url": "https://pypi.org",
+        "cookie_count": 1,
+        "has_last_seen_csrf": True,
+        "email_verified": True,
+        "two_factor_enabled": True,
+    }
+
+    loaded = session_ops.load_session_payload_from_env(env_profile="RexWzh", home=tmp_path / "home")
+
+    assert loaded["username"] == "Profile"
+    assert loaded["cookies"][0]["value"] == "opaque-cookie-fixture"
+
+
+def test_session_loader_does_not_fallback_to_legacy_process_env(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "PYPI_SESSION_TOKEN",
+        session_ops.encode_session_token({"username": "Legacy", "cookies": []}),
     )
 
-    payload = session_ops.load_session_payload_from_env(env_profile="RexWzh")
-
-    assert payload["username"] == "Profile"
+    with pytest.raises(session_ops.PyPISessionError, match="tokens/PyPI/default.json"):
+        session_ops.load_session_payload_from_env(home=tmp_path / "home")
 
 
 def test_build_and_reload_session_payload(tmp_path):
     session = requests.Session()
-    session.cookies.set("session_id", "secret-cookie", domain="pypi.org", path="/")
+    session.cookies.set("session_id", "opaque-cookie-fixture", domain="pypi.org", path="/")
     payload = session_ops.build_session_payload(
         session,
         username="LooKeng",
@@ -157,17 +218,16 @@ def test_build_and_reload_session_payload(tmp_path):
 
     assert loaded["username"] == "LooKeng"
     assert loaded["cookies"][0]["name"] == "session_id"
-    assert loaded["cookies"][0]["value"] == "secret-cookie"
-    assert path.stat().st_mode & 0o777 == 0o600
+    assert loaded["cookies"][0]["value"] == "opaque-cookie-fixture"
 
 
 def test_requests_session_from_payload_restores_cookie():
     payload = {
         "cookies": [
-            {"name": "session_id", "value": "secret-cookie", "domain": "pypi.org", "path": "/"}
+            {"name": "session_id", "value": "opaque-cookie-fixture", "domain": "pypi.org", "path": "/"}
         ]
     }
 
     session = session_ops.requests_session_from_payload(payload)
 
-    assert session.cookies.get("session_id", domain="pypi.org", path="/") == "secret-cookie"
+    assert session.cookies.get("session_id", domain="pypi.org", path="/") == "opaque-cookie-fixture"

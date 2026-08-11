@@ -93,7 +93,7 @@ chatpypi
 当前实现重点：
 
 - `pkg`：包初始化、构建、检查、上传、探测
-- `auth login`：使用用户名、密码和可选 TOTP 获取真实 PyPI 登录 session，并写入本地 session token
+- `auth login`：使用用户名、密码和可选 TOTP 获取真实 PyPI 登录 session，并写入 ChatEnv token profile
 - `auth whoami` / `auth session show|clear`：真实 session 验证与本地 session 摘要读取
 - `project list`：读取登录账号的 PyPI projects 页面
 - `publisher list` / `publisher detail`：读取账号级和项目级 Trusted Publisher 状态
@@ -134,7 +134,7 @@ chatenv new -t pypi default
   - `PYPI_USERNAME`：PyPI 用户名，用于 `chatpypi auth login`
   - `PYPI_PASSWORD`：PyPI 密码，只通过 `--password-env` 读取，不直接作为命令行值传入
   - `PYPI_TOTP_SECRET`：可选 TOTP secret，用于自动完成 2FA checkpoint
-  - `PYPI_SESSION_TOKEN`：`chatpypi auth login` 生成/刷新并写回 ChatEnv 的网页登录态 token
+  - Web 登录态 session：`chatpypi auth login` 生成/刷新到 `tokens/PyPI/<profile>.json`，与 `envs/PyPI/<profile>.env` 一一对应
 - 手动发布：
   - `PYPI_API_TOKEN`：PyPI API token，配合 `chatpypi pkg upload --token-env PYPI_API_TOKEN`
 
@@ -148,7 +148,7 @@ chatenv new -t pypi default
 
 - 不要把 token、密码直接写进命令行参数；
 - `--token-env` / `--password-env` 只接收“环境变量名”，CLI 会在运行时读取其值；
-- `PYPI_SESSION_TOKEN` 属于敏感值，由 `chatpypi auth login` 默认写回 active ChatEnv PyPI profile；也可以用 `-e/--env-profile NAME` 指定读取/写入某个 named profile，而不切换全局默认；CLI 只输出非敏感摘要，不直接回显 cookie；
+- Web session 属于动态 runtime state，由 `chatpypi auth login` 默认写回 ChatEnv token profile；可以用 `-e/--env-profile NAME` 指定读取/写入同名 token profile，而不切换全局默认；CLI 只输出非敏感摘要，不直接回显 cookie；
 - `.env` 中若有包含空格的值，不要直接 `source .env`，应使用更安全的解析方式。
 
 示例：
