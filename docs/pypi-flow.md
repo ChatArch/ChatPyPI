@@ -27,7 +27,7 @@ chatpypi auth session show
 chatpypi project list
 ```
 
-登录态通过 `PYPI_SESSION_TOKEN` / ChatEnv `pypi` profile 管理。报告和日志中不得输出 session token、cookie 或密码。
+登录态通过 ChatEnv token store 的 `tokens/PyPI/<profile>.json` 管理，并与 ChatEnv `pypi` env profile 一一对应。报告和日志中不得输出 session token、cookie 或密码。
 
 ## 已实现：Trusted Publisher 辅助
 

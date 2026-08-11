@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.8 - 2026-08-11
+
+### Changed
+
+- Move PyPI web-session runtime state from stable ChatEnv `PYPI_SESSION_TOKEN` fields into ChatEnv's generic token store at `tokens/PyPI/<profile>.json`.
+- Remove `PYPI_SESSION_TOKEN` from the ChatPyPI ChatEnv provider schema; stable env profiles now keep account/config values only.
+- Make `chatpypi auth login`, `auth session show|clear`, `auth whoami`, `project list`, `publisher *`, and `doctor check` use the parallel token profile selected by `-e/--env-profile`.
+
 ## 0.2.7 - 2026-08-09
 
 ### Added

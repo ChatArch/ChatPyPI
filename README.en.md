@@ -93,7 +93,7 @@ chatpypi
 Current implementation focus:
 
 - `pkg`: package init/build/check/upload/probe
-- `auth login`: log in to PyPI with username/password and optional TOTP, then refresh `PYPI_SESSION_TOKEN` in the active ChatEnv PyPI profile
+- `auth login`: log in to PyPI with username/password and optional TOTP, then refresh the parallel ChatEnv token profile
 - `auth whoami` / `auth session show|clear`: validate the saved session and show non-sensitive local summaries
 - `project list`: read the logged-in account's PyPI projects page
 - `publisher list` / `publisher detail`: read account-level and project-level Trusted Publisher state
@@ -135,7 +135,7 @@ The minimum set currently falls into two categories:
   - `PYPI_USERNAME`: PyPI username for `chatpypi auth login`
   - `PYPI_PASSWORD`: PyPI password, read indirectly through `--password-env`
   - `PYPI_TOTP_SECRET`: optional TOTP secret for 2FA checkpoints
-  - `PYPI_SESSION_TOKEN`: web-session token generated/refreshed by `chatpypi auth login` and stored in ChatEnv
+  - Web session state: generated/refreshed by `chatpypi auth login` into `tokens/PyPI/<profile>.json`, parallel to `envs/PyPI/<profile>.env`
 - Manual uploads:
   - `PYPI_API_TOKEN`: PyPI API token used with `chatpypi pkg upload --token-env PYPI_API_TOKEN`
 
@@ -151,7 +151,7 @@ Recommended rules:
 - do not pass tokens or passwords directly on the command line;
 - `--token-env` / `--password-env` accept an env var name, and the CLI resolves
   the secret value at runtime;
-- `PYPI_SESSION_TOKEN` is sensitive and is written back to the active ChatEnv PyPI profile by `chatpypi auth login`; use `-e/--env-profile NAME` to read or write a named profile without activating it globally; the CLI only prints non-sensitive summaries instead of raw cookies;
+- Web session state is dynamic runtime state and is written back to the ChatEnv token profile by `chatpypi auth login`; use `-e/--env-profile NAME` to read or write the same named token profile without activating it globally; the CLI only prints non-sensitive summaries instead of raw cookies;
 - if a `.env` file contains values with spaces, avoid blindly running
   `source .env`; parse it safely instead.
 

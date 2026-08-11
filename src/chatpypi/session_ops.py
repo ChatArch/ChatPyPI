@@ -18,11 +18,13 @@ from typing import Any
 from urllib.parse import urljoin
 
 import requests
-
-from .config import SESSION_TOKEN_ENV, load_active_pypi_env, load_pypi_env_profile
-
+from chatenv import TokenStore
 
 DEFAULT_BASE_URL = "https://pypi.org"
+SERVICE_NAME = "PyPI"
+SESSION_TOKEN_TYPE = "web_session"
+SESSION_SOURCE_LABEL = "ChatEnv token store"
+LEGACY_SESSION_TOKEN_ENV = "PYPI_SESSION_TOKEN"
 
 
 class PyPISessionError(RuntimeError):
@@ -279,7 +281,7 @@ def build_session_payload(
 def save_session_payload(payload: dict[str, Any], session_file: Path | str) -> Path:
     """Write a payload to an explicitly provided JSON path.
 
-    Runtime session state is env-backed; this helper is explicit-only for tests
+    Runtime session state is token-store backed; this helper is explicit-only for tests
     and deliberate operator export flows.
     """
 
@@ -311,44 +313,127 @@ def encode_session_token(payload: dict[str, Any]) -> str:
 
 
 def decode_session_token(token: str) -> dict[str, Any]:
-    """Decode an env-backed PyPI web session token."""
+    """Decode an explicitly supplied serialized PyPI web-session token."""
 
     try:
         raw = token.strip()
         raw += "=" * ((-len(raw)) % 4)
         payload = json.loads(base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8"))
     except Exception as exc:  # noqa: BLE001 - normalize decode errors for CLI callers.
-        raise PyPISessionError("PYPI_SESSION_TOKEN is not a valid ChatPyPI session token.") from exc
+        raise PyPISessionError("Serialized PyPI session token is not valid ChatPyPI session data.") from exc
     if not isinstance(payload, dict):
-        raise PyPISessionError("PYPI_SESSION_TOKEN must decode to a JSON object.")
+        raise PyPISessionError("Serialized PyPI session token must decode to a JSON object.")
     return payload
+
+
+def _session_summary_for_store(payload: dict[str, Any]) -> dict[str, Any]:
+    cookies = payload.get("cookies")
+    csrf = payload.get("csrf")
+    meta = payload.get("meta")
+    return {
+        "provider": payload.get("provider") or "pypi",
+        "username": payload.get("username") or "",
+        "base_url": str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/"),
+        "cookie_count": len(cookies) if isinstance(cookies, list) else 0,
+        "has_last_seen_csrf": bool(isinstance(csrf, dict) and csrf.get("last_seen_token")),
+        "email_verified": meta.get("email_verified") if isinstance(meta, dict) else None,
+        "two_factor_enabled": meta.get("two_factor_enabled") if isinstance(meta, dict) else None,
+    }
+
+
+def _token_store(home: str | Path | None = None) -> TokenStore:
+    return TokenStore(home=home)
+
+
+def session_token_profile(env_profile: str | None = None) -> str:
+    return env_profile or "default"
+
+
+def save_session_payload_to_token_store(
+    payload: dict[str, Any],
+    *,
+    env_profile: str | None = None,
+    home: str | Path | None = None,
+    source: str = "login",
+) -> dict[str, Any]:
+    """Save PyPI web-session runtime state through ChatEnv's generic token store."""
+
+    if not isinstance(payload, dict):
+        raise PyPISessionError("PyPI session payload must be a JSON object.")
+    if not isinstance(payload.get("cookies"), list):
+        raise PyPISessionError("PyPI session payload missing cookie list.")
+    store = _token_store(home)
+    return store.write(
+        SERVICE_NAME,
+        session_token_profile(env_profile),
+        values={"payload": payload},
+        token_type=SESSION_TOKEN_TYPE,
+        summary=_session_summary_for_store(payload),
+        source=source,
+    )
+
+
+def session_token_store_status(
+    *,
+    env_profile: str | None = None,
+    home: str | Path | None = None,
+) -> dict[str, Any]:
+    return _token_store(home).status(SERVICE_NAME, session_token_profile(env_profile))
+
+
+def clear_session_token_store(
+    *,
+    env_profile: str | None = None,
+    home: str | Path | None = None,
+    execute: bool = True,
+) -> dict[str, Any]:
+    return _token_store(home).clear(SERVICE_NAME, session_token_profile(env_profile), execute=execute)
+
+
+def load_session_payload_from_token_store(
+    *,
+    env_profile: str | None = None,
+    home: str | Path | None = None,
+) -> dict[str, Any]:
+    """Load PyPI web-session runtime state from ChatEnv's token store."""
+
+    profile = session_token_profile(env_profile)
+    store = _token_store(home)
+    token_file = store.token_path(SERVICE_NAME, profile)
+    payload = store.read(SERVICE_NAME, profile)
+    if not payload:
+        raise PyPISessionError(
+            f"PyPI session token store is missing: {token_file}. Run `chatpypi auth login` to refresh it."
+        )
+    if payload.get("token_type") != SESSION_TOKEN_TYPE:
+        raise PyPISessionError(
+            f"PyPI token store has unsupported token_type: {payload.get('token_type') or 'unknown'}."
+        )
+    values = payload.get("values") if isinstance(payload.get("values"), dict) else {}
+    session_payload = values.get("payload")
+    if not isinstance(session_payload, dict):
+        raise PyPISessionError("PyPI token store payload is not a valid session object.")
+    if not isinstance(session_payload.get("cookies"), list):
+        raise PyPISessionError("PyPI token store payload missing cookie list.")
+    return session_payload
 
 
 def load_session_payload_from_env(
     *,
     token: str | None = None,
-    token_env: str = SESSION_TOKEN_ENV,
+    token_env: str = LEGACY_SESSION_TOKEN_ENV,
     env_profile: str | None = None,
     home: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Load a session payload from explicit token, process env, or ChatEnv."""
+    """Load a session payload from explicit token or ChatEnv token store.
 
-    value = token
-    if not value and env_profile:
-        try:
-            value = load_pypi_env_profile(env_profile, home=home).get(token_env)
-        except ValueError as exc:
-            raise PyPISessionError(str(exc)) from exc
-    if not value and not env_profile:
-        value = os.getenv(token_env)
-    if not value and not env_profile:
-        value = load_active_pypi_env(home).get(token_env)
-    if not value:
-        profile_hint = f" in profile {env_profile!r}" if env_profile else ""
-        raise PyPISessionError(
-            f"{token_env}{profile_hint} is missing. Run `chatpypi auth login` to refresh the PyPI session token."
-        )
-    return decode_session_token(value)
+    ``token_env`` remains in the Python signature only for old internal callers;
+    it is not used as a fallback. Runtime state lives in ``tokens/PyPI/<profile>.json``.
+    """
+
+    if token:
+        return decode_session_token(token)
+    return load_session_payload_from_token_store(env_profile=env_profile, home=home)
 
 
 def load_session_payload(session_file: Path | str) -> dict[str, Any]:
@@ -534,7 +619,7 @@ def list_projects_from_payload(
 def list_projects_from_session(
     session_token: str | None = None,
     *,
-    token_env: str = SESSION_TOKEN_ENV,
+    token_env: str = LEGACY_SESSION_TOKEN_ENV,
     env_profile: str | None = None,
     timeout: float = 20.0,
 ) -> dict[str, Any]:
@@ -633,6 +718,41 @@ def _active_publisher_records(html: str) -> list[dict[str, Any]]:
     return [record for record in records if record.get("publisher") or record.get("repository") or record.get("workflow")]
 
 
+def _active_project_link_records(html: str) -> list[dict[str, Any]]:
+    """Parse PyPI account overview rows that link to project publishing pages.
+
+    PyPI's account-level Trusted Publisher page currently renders the
+    "Projects with active publishers" overview as project links rather than a
+    table. Project-level pages still expose provider/repository/workflow detail
+    via tables, so this fallback intentionally records only the active project
+    names found in account overview links.
+    """
+
+    parser = TextLinkParser()
+    parser.feed(html)
+    seen: set[str] = set()
+    records: list[dict[str, Any]] = []
+    for href, text in parser.links:
+        parts = [part for part in href.strip().split("/") if part]
+        if len(parts) != 5:
+            continue
+        if parts[0] != "manage" or parts[1] != "project" or parts[3:] != ["settings", "publishing"]:
+            continue
+        project = parts[2]
+        if not project or project in seen:
+            continue
+        seen.add(project)
+        records.append(
+            {
+                "section": "Projects with active publishers",
+                "project": project,
+                "fields": {"Project": project},
+                "values": [project],
+            }
+        )
+    return records
+
+
 def find_github_publisher(
     payload: dict[str, Any], *, owner: str, repository: str, workflow: str, environment: str | None = None
 ) -> dict[str, Any] | None:
@@ -656,6 +776,8 @@ def parse_publishing_page(html: str) -> dict[str, Any]:
     text.feed(html)
     page_text = text.text.lower()
     active = _active_publisher_records(html)
+    if not active:
+        active = _active_project_link_records(html)
     pending = _table_records_for_keywords(html, ("pending",))
     publisher_details: list[dict[str, Any]] = list(active)
     detail_parser = SectionTableParser()
@@ -956,7 +1078,7 @@ def list_publishers_from_payload(
 def list_publishers_from_session(
     session_token: str | None = None,
     *,
-    token_env: str = SESSION_TOKEN_ENV,
+    token_env: str = LEGACY_SESSION_TOKEN_ENV,
     env_profile: str | None = None,
     timeout: float = 20.0,
 ) -> dict[str, Any]:

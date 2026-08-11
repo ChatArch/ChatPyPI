@@ -52,21 +52,21 @@ chatpypi probe            # 兼容 `chatpypi pkg probe`
 
 ```text
 chatpypi auth             # 登录态、账号和引导型操作
-├── login                 # 用户名/密码/TOTP 登录，并写入 session token
-├── logout                # 清理本地 session token
+├── login                 # 用户名/密码/TOTP 登录，并写入 ChatEnv token profile
+├── logout                # 清理本地 session token-store state
 ├── whoami                # 用 session 读回当前账号摘要
 ├── register              # 规划 / checkpoint：账号注册
 ├── verify-email          # 规划 / checkpoint：邮箱验证
 ├── setup-2fa             # 规划 / checkpoint：2FA 初始化
 ├── recovery-codes        # 规划 / checkpoint：恢复码处理
-└── session               # env-backed PyPI session 管理
+└── session               # token-backed PyPI session 管理
     ├── show              # 输出非敏感 session 摘要
     ├── export            # 规划 / checkpoint：导出 session
     ├── import            # 规划 / checkpoint：导入 session
-    └── clear             # 清理 session token
+    └── clear             # 清理 session token-store state
 ```
 
-认证命令必须遵守安全边界：密码、TOTP secret、session token、cookie 只通过 env/profile/private store 读取或写入，CLI 和文档都不能回显真实值。`auth login`、`auth whoami` 和 `auth session show|clear` 是当前已实现主路径；注册、邮箱验证、2FA 初始化和恢复码仍然是人工 checkpoint。
+认证命令必须遵守安全边界：密码、TOTP secret、session runtime state、cookie 只通过 env/profile/private store 读取或写入，CLI 和文档都不能回显真实值。`auth login`、`auth whoami` 和 `auth session show|clear` 是当前已实现主路径；注册、邮箱验证、2FA 初始化和恢复码仍然是人工 checkpoint。
 
 ## Project 和 Trusted Publisher
 
