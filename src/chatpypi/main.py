@@ -1325,6 +1325,9 @@ def _build_chatarch_mkdocs_yml(package_name: str, docs_domain: str | None = None
               - pymdownx.inlinehilite
               - pymdownx.highlight:
                   anchor_linenums: true
+              - pymdownx.emoji:
+                  emoji_index: !!python/name:material.extensions.emoji.twemoji
+                  emoji_generator: !!python/name:material.extensions.emoji.to_svg
             extra:
               alternate:
                 - name: 中文
@@ -1610,7 +1613,6 @@ def scaffold_package(
                       push:
                         tags:
                           - "v*"
-                      workflow_dispatch:
 
                     permissions:
                       contents: read
@@ -1650,8 +1652,7 @@ def scaffold_package(
                                   print(f"version={version}", file=output)
                                   print(f"tag=v{version}", file=output)
                               PY
-                          - name: Check tag matches package version
-                            if: github.event_name == 'push'
+                          - name: Verify tag matches package version
                             env:
                               RELEASE_TAG: ${{ steps.meta.outputs.tag }}
                             run: |
@@ -1659,6 +1660,10 @@ def scaffold_package(
                                 echo "Tag ${GITHUB_REF_NAME} does not match package version ${RELEASE_TAG}."
                                 exit 1
                               fi
+                          - name: Check tag commit is on main
+                            run: |
+                              git fetch --no-tags origin main:refs/remotes/origin/main
+                              git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main
                           - name: Check PyPI version
                             id: pypi
                             env:
@@ -1763,29 +1768,41 @@ def scaffold_package(
                               python-version: "{workflow_python_version}"
                           - run: python -m pip install --upgrade pip
                           - run: python -m pip install -e ".[docs]"
-                          - run: |
-                              git fetch origin
-                              mike deploy dev -p --allow-empty
-                              repo="${GITHUB_REPOSITORY#*/}"
-                              preview_url="https://{docs_domain}/${repo}/dev/"
+                          - name: Deploy preview docs
+                            run: |
+                              git fetch origin gh-pages --depth=1 || true
+                              mike deploy dev --push --update-aliases --allow-empty
+                              site_url=$(python - <<'PY'
+                              from pathlib import Path
+
+                              for line in Path("mkdocs.yml").read_text(encoding="utf-8").splitlines():
+                                  if line.startswith("site_url:"):
+                                      print(line.split(":", 1)[1].strip().rstrip("/"))
+                                      break
+                              else:
+                                  raise SystemExit("mkdocs.yml is missing site_url")
+                              PY
+                              )
+                              preview_url="${site_url}/dev/"
+                              echo "CHATARCH_PREVIEW_URL=${preview_url}" >> "$GITHUB_ENV"
                               echo "Preview URL: ${preview_url}" >> "$GITHUB_STEP_SUMMARY"
 
                           - name: Comment PR with Preview Link
                             uses: actions/github-script@v6
                             with:
                               script: |
-                                const { payload, repo } = context;
-                                const previewLink = `https://{docs_domain}/${repo.repo}/dev/`;
+                                const { payload } = context;
+                                const previewLink = process.env.CHATARCH_PREVIEW_URL;
                                 const comments = await github.rest.issues.listComments({
-                                  owner: repo.owner,
-                                  repo: repo.repo,
+                                  owner: context.repo.owner,
+                                  repo: context.repo.repo,
                                   issue_number: payload.number,
                                 });
                                 const existingComment = comments.data.find(comment => comment.body.includes(previewLink));
                                 if (!existingComment) {
                                   await github.rest.issues.createComment({
-                                    owner: repo.owner,
-                                    repo: repo.repo,
+                                    owner: context.repo.owner,
+                                    repo: context.repo.repo,
                                     issue_number: payload.number,
                                     body: `Preview available at: ${previewLink}`,
                                   });

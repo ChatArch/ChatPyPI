@@ -553,13 +553,20 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     preview_text = (project_dir / ".github" / "workflows" / "preview.yaml").read_text(
         encoding="utf-8"
     )
-    assert "https://arch.gh.wzhecnu.cn/${repo}/dev/" in preview_text
-    assert "https://arch.gh.wzhecnu.cn/${repo.repo}/dev/" in preview_text
-    assert "github.io" not in preview_text
+    assert "git fetch origin gh-pages --depth=1 || true" in preview_text
+    assert "mike deploy dev --push --update-aliases --allow-empty" in preview_text
+    assert "Path(\"mkdocs.yml\")" in preview_text
+    assert "CHATARCH_PREVIEW_URL" in preview_text
+    assert "https://arch.gh.wzhecnu.cn/${" + "repo}/dev/" not in preview_text
+    assert "https://arch.gh.wzhecnu.cn/${" + "repo.repo}/dev/" not in preview_text
+    assert ("github" + ".io") not in preview_text
     mkdocs_text = (project_dir / "mkdocs.yml").read_text(encoding="utf-8")
     assert "- i18n:" in mkdocs_text
     assert "docs_structure: suffix" in mkdocs_text
     assert "fallback_to_default: true" in mkdocs_text
+    assert "pymdownx.emoji:" in mkdocs_text
+    assert "material.extensions.emoji.twemoji" in mkdocs_text
+    assert "material.extensions.emoji.to_svg" in mkdocs_text
     assert "navigation.tabs" in mkdocs_text
     assert "- attr_list" in mkdocs_text
     assert "- md_in_html" in mkdocs_text
@@ -585,12 +592,16 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     publish_text = (project_dir / ".github" / "workflows" / "publish.yml").read_text(
         encoding="utf-8"
     )
+    assert "workflow" + "_dispatch:" not in publish_text
     assert 'tags:\n      - "v*"' in publish_text
     assert "contents: read" in publish_text
     assert "id-token: write" in publish_text
     assert "environment: pypi" not in publish_text
-    assert "Check tag matches package version" in publish_text
+    assert "Verify tag matches package version" in publish_text
+    assert "if: github.event_name == 'push'" not in publish_text
     assert "GITHUB_REF_NAME" in publish_text
+    assert "git fetch --no-tags origin main:refs/remotes/origin/main" in publish_text
+    assert "git merge-base --is-ancestor \"${GITHUB_SHA}\" refs/remotes/origin/main" in publish_text
     assert "git tag -a" not in publish_text
     assert "python -m twine check dist/*" in publish_text
     assert "pypa/gh-action-pypi-publish@release/v1" in publish_text
@@ -690,9 +701,12 @@ def test_chatpypi_init_chatarch_template_accepts_custom_docs_domain(tmp_path):
     assert "site_url: https://docs.example.com/mychat-cli/" in (
         project_dir / "mkdocs.yml"
     ).read_text(encoding="utf-8")
-    assert "https://docs.example.com/${repo}/dev/" in (
-        project_dir / ".github" / "workflows" / "preview.yaml"
-    ).read_text(encoding="utf-8")
+    preview_text = (project_dir / ".github" / "workflows" / "preview.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "Path(\"mkdocs.yml\")" in preview_text
+    assert "CHATARCH_PREVIEW_URL" in preview_text
+    assert "https://docs.example.com/${" + "repo}/dev/" not in preview_text
 
 
 def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
