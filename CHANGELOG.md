@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.10 - 2026-08-12
+
+### Fixed
+
+- Harden ChatPyPI's own PyPI publish workflow so releases are tag-only, use OIDC without legacy token secrets, verify the tag matches `__version__`, and require the tag commit to be on `main` without fetching tags.
+- Update Preview Docs workflow to fetch `gh-pages` before `mike deploy` and derive the preview URL from `mkdocs.yml` `site_url` instead of hard-coded repo URL templates.
+- Enable the MkDocs Material emoji renderer baseline for ChatPyPI's docs and generated ChatArch scaffold docs.
+- Update the ChatArch scaffold generator so new packages inherit the hardened publish/preview docs workflow contracts.
+
 ## 0.2.9 - 2026-08-11
 
 ### Fixed

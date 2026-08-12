@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -44,8 +43,7 @@ jobs:
               print(f"version={version}", file=output)
               print(f"tag=v{version}", file=output)
           PY
-      - name: Check tag matches package version
-        if: github.event_name == 'push'
+      - name: Verify tag matches package version
         env:
           RELEASE_TAG: ${{ steps.meta.outputs.tag }}
         run: |
@@ -53,6 +51,10 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match package version ${RELEASE_TAG}."
             exit 1
           fi
+      - name: Check tag commit is on main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main
       - name: Check PyPI version
         id: pypi
         env:
