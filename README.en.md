@@ -182,7 +182,7 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## CLI Contract
 
-This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.9,<0.3.0`. New commands should prefer:
+This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0`. New commands should prefer:
 
 - `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` to render registered Click metadata.
 - `CommandSchema` / `CommandField` for inputs.

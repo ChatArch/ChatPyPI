@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.12 - 2026-08-21
+
+### Changed
+
+- Raise ChatPyPI and generated ChatArch scaffold dependency bounds to `chatenv>=0.2.11,<0.3.0` while keeping `chatstyle>=0.2.0,<0.3.0`.
+- Refresh generated `AGENTS.md` guidance for workgroup `.env` files, local skills, MkDocs grouped navigation, CLI tree docs, and tag-only PyPI publishing.
+- Clarify the ChatArch template docs/tests around grouped MkDocs navigation and real `--tree` / `--tree-brief` readbacks.
+
+
 ## 0.2.11 - 2026-08-21
 
 ### Added

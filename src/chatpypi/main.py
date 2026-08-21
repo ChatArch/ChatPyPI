@@ -371,7 +371,7 @@ def _build_chatarch_pyproject_content(
         'readme = "README.md"',
         f'requires-python = "{_toml_escape(requires_python)}"',
         f'license = "{_toml_escape(license_name)}"',
-        'dependencies = ["click>=8.0", "chatstyle>=0.2.0,<0.3.0", "chatenv>=0.2.9,<0.3.0"]',
+        'dependencies = ["click>=8.0", "chatstyle>=0.2.0,<0.3.0", "chatenv>=0.2.11,<0.3.0"]',
     ]
     if author and email:
         lines.append(
@@ -627,7 +627,7 @@ python -m build
 
 ## 命令行规范
 
-这个模板默认依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.9,<0.3.0`，新增命令应优先使用：
+这个模板默认依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.11,<0.3.0`，新增命令应优先使用：
 
 - `add_tree_option()` 提供共享的 `--tree` / `--tree-brief`，`render_click_tree()` 从已注册 Click 元数据生成命令树。
 - `CommandSchema` / `CommandField` 描述输入。
@@ -702,7 +702,7 @@ python -m build
 
 ## CLI Contract
 
-This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.9,<0.3.0`. New commands should prefer:
+This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0`. New commands should prefer:
 
 - `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` to render registered Click metadata.
 - `CommandSchema` / `CommandField` for inputs.
@@ -728,7 +728,7 @@ def _build_chatarch_develop_md() -> str:
 
             ## CLI Rules
 
-            - Use `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.9,<0.3.0` as the canonical CLI interaction runtime.
+            - Use `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0` as the canonical CLI interaction runtime.
             - Use `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` for programmatic Click-tree readback.
             - Prefer `CommandSchema`, `CommandField`, `add_interactive_option()`, and `resolve_command_inputs()` for new commands.
             - Missing required args should auto-enter interactive mode when recoverable.
@@ -1312,12 +1312,31 @@ def _build_chatarch_agends_md() -> str:
             """
             # Agent Notes
 
-            ## Development Expectations
+            ## Workgroup Baseline
 
-            - Keep changes minimal and reviewable.
-            - Prefer doc-first CLI tests.
-            - Sync docs and changelog with user-facing behavior.
-            - Use interactive prompts only when arguments are missing and recoverable.
+            - Keep a local `.env` for each task/workgroup when credentials, proxies, or service endpoints are needed; do not commit it and never print secret values.
+            - Load project-local skills or instructions before editing. Treat this file as the repository-level baseline and add narrower notes only when the package needs them.
+            - Preserve user or worker changes in dirty checkouts. Use a clean worktree or branch when a release needs an isolated state.
+
+            ## CLI Package Standard
+
+            - Use `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0` as the ChatArch CLI runtime baseline.
+            - Root Click commands should set the real command name explicitly, expose `--version`, and use ChatStyle `add_tree_option()` for `--tree` and `--tree-brief`.
+            - `--tree` must render the registered Click command surface with signatures; `--tree-brief` must omit signatures while preserving command nodes and descriptions.
+            - Keep CLI code thin. Move package capabilities into importable Python APIs and cover them with code tests.
+
+            ## Docs, MkDocs, and Tests
+
+            - Keep README, CHANGELOG, generated docs, and tests synchronized with user-visible behavior.
+            - MkDocs navigation should stay grouped: an overview/home entry plus a `命令与接口` / `Commands and APIs` group containing CLI tree, capability map, and Python interface tree.
+            - The CLI tree page is the command entry point; update it whenever commands, options, or command status change.
+            - Prefer doc-first CLI tests under `tests/cli-tests/`, mock/fake interaction tests under `tests/mock-cli-tests/`, and non-CLI code tests under `tests/code-tests/`.
+
+            ## Release and Publishing
+
+            - Release through PR, green exact-head checks, merge, tag on the merged default-branch commit, then PyPI publish workflow.
+            - Publishing is tag-only and uses PyPI Trusted Publisher/OIDC; do not add long-lived PyPI API tokens to workflows.
+            - Before declaring a release complete, verify PyPI artifacts plus a clean install with no `PYTHONPATH`, `pip check`, `--version`, `--tree`, and `--tree-brief`.
             """
         ).strip()
         + "\n"

@@ -523,6 +523,12 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert not (project_dir / "docs" / "CNAME").exists()
     assert (project_dir / "README.en.md").exists()
     assert (project_dir / "mkdocs.yml").exists()
+    agents_text = (project_dir / "AGENTS.md").read_text(encoding="utf-8")
+    assert "local `.env`" in agents_text
+    assert "project-local skills" in agents_text
+    assert "MkDocs navigation should stay grouped" in agents_text
+    assert "The CLI tree page is the command entry point" in agents_text
+    assert "PyPI Trusted Publisher/OIDC" in agents_text
     assert (project_dir / "tests" / "cli-tests" / "README.md").exists()
     assert (project_dir / "tests" / "mock-cli-tests" / "README.md").exists()
     assert (project_dir / "tests" / "code-tests" / "README.md").exists()
@@ -533,7 +539,7 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "site/" in (project_dir / ".gitignore").read_text(encoding="utf-8")
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
     assert '"chatstyle>=0.2.0,<0.3.0"' in pyproject_text
-    assert '"chatenv>=0.2.9,<0.3.0"' in pyproject_text
+    assert '"chatenv>=0.2.11,<0.3.0"' in pyproject_text
     assert 'requires-python = ">=3.10"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
@@ -757,7 +763,7 @@ def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
     assert not (project_dir / ".github").exists()
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
     assert '"chatstyle>=0.2.0,<0.3.0"' in pyproject_text
-    assert '"chatenv>=0.2.9,<0.3.0"' in pyproject_text
+    assert '"chatenv>=0.2.11,<0.3.0"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
     assert 'docs = ["mkdocs' not in pyproject_text
