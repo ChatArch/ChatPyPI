@@ -10,7 +10,8 @@
 chatpypi                  # Python 包生命周期与 PyPI 操作入口
 ├── --help                # 显示当前命令帮助
 ├── --version             # 输出当前包版本
-├── --tree                # 输出真实已注册 CLI 树
+├── --tree                # 输出带参数签名的真实已注册 CLI 树
+├── --tree-brief          # 输出命令节点和描述，不含参数签名
 ├── pkg                   # 包模板、构建、校验、上传和探测
 ├── auth                  # 登录态、账号和人工 checkpoint 流程
 ├── profile               # 规划：本地 ChatPyPI profile 管理
@@ -27,7 +28,7 @@ chatpypi                  # Python 包生命周期与 PyPI 操作入口
 └── probe                 # 兼容快捷入口：检查 PyPI 包名是否可用
 ```
 
-运行 `chatpypi --tree` 可回读真实注册树；`pkg init -t chatarch` 生成的新包也包含顶层 `--tree`。
+`chatpypi --tree` 和 `chatpypi --tree-brief` 由 ChatStyle 的 `add_tree_option()` 提供，并通过共享 `render_click_tree()` 回读注册树。默认树保留参数签名；简明树保留命令节点和描述，但省略参数签名。`pkg init -t chatarch` 生成的新包也包含这两个顶层选项。
 
 ## 包生命周期
 

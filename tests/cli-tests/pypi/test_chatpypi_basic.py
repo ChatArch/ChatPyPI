@@ -532,8 +532,8 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / ".github" / "workflows" / "preview.yaml").exists()
     assert "site/" in (project_dir / ".gitignore").read_text(encoding="utf-8")
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"chatstyle>=0.1.0,<0.2.0"' in pyproject_text
-    assert '"chatenv>=0.2.0,<0.3.0"' in pyproject_text
+    assert '"chatstyle>=0.2.0,<0.3.0"' in pyproject_text
+    assert '"chatenv>=0.2.9,<0.3.0"' in pyproject_text
     assert 'requires-python = ">=3.10"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
@@ -550,6 +550,12 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     ]
     assert all('python-version: "3.10"' in text for text in workflow_texts)
     assert all("3.11" not in text for text in workflow_texts)
+    ci_text = (project_dir / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "python -m mychat_cli.cli --version" in ci_text
+    assert "python -m mychat_cli.cli --tree" in ci_text
+    assert "python -m mychat_cli.cli --tree-brief" in ci_text
     preview_text = (project_dir / ".github" / "workflows" / "preview.yaml").read_text(
         encoding="utf-8"
     )
@@ -584,7 +590,9 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "像 ChatTea 的 CLI 树一样" in cli_tree_text
     assert "├── --help" in cli_tree_text
     assert "├── --version" in cli_tree_text
-    assert "└── --tree" in cli_tree_text
+    assert "├── --tree" in cli_tree_text
+    assert "└── --tree-brief" in cli_tree_text
+    assert "默认树保留参数签名" in cli_tree_text
     capability_text = (project_dir / "docs" / "capability-map.md").read_text(encoding="utf-8")
     assert "# 能力地图" in capability_text
     assert "不生成计划类占位页" in capability_text
@@ -617,9 +625,10 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     )
     assert (project_dir / "src" / "mychat_cli" / "config.py").exists()
     assert "from mychat_cli import __version__" in cli_text
+    assert "from chatstyle import add_tree_option" in cli_text
     assert '@click.version_option(__version__, prog_name="mychat_cli")' in cli_text
-    assert 'click.option("--tree"' in cli_text
-    assert "_render_cli_tree" in cli_text
+    assert '@add_tree_option(renderer_options={"root_name": "mychat_cli"})' in cli_text
+    assert "_render_cli_tree" not in cli_text
     assert "HELLO_SCHEMA" not in cli_text
     assert "def hello" not in cli_text
     assert "Hello, ChatArch" not in cli_text
@@ -627,10 +636,22 @@ def test_chatpypi_init_chatarch_template(tmp_path):
         encoding="utf-8"
     )
     assert "test_version_option_reports_package_version" in generated_test_text
+    assert "test_help_lists_shared_tree_options" in generated_test_text
     assert "test_tree_option_prints_registered_cli_tree" in generated_test_text
-    assert "└── --tree" in generated_test_text
+    assert "test_tree_brief_option_prints_registered_cli_tree" in generated_test_text
+    assert '"--tree-brief"' in generated_test_text
     assert "test_hello" not in generated_test_text
     assert "Hello, ChatArch" not in generated_test_text
+    generated_pytest = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q"],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert generated_pytest.returncode == 0, (
+        generated_pytest.stdout + generated_pytest.stderr
+    )
     readme_text = (project_dir / "README.md").read_text(encoding="utf-8")
     assert readme_text.startswith('<div align="center">\n')
     assert "\n# mychat-cli\n\n" in readme_text
@@ -645,6 +666,8 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "[English](README.en.md)" not in readme_text
     assert "mychat_cli --help" in readme_text
     assert "mychat_cli --version" in readme_text
+    assert "mychat_cli --tree" in readme_text
+    assert "mychat_cli --tree-brief" in readme_text
     assert "按场景选择文档" in readme_text
     assert "docs/cli-tree.md" in readme_text
     assert "docs/capability-map.md" in readme_text
@@ -733,8 +756,8 @@ def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
     assert not (project_dir / "docs").exists()
     assert not (project_dir / ".github").exists()
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"chatstyle>=0.1.0,<0.2.0"' in pyproject_text
-    assert '"chatenv>=0.2.0,<0.3.0"' in pyproject_text
+    assert '"chatstyle>=0.2.0,<0.3.0"' in pyproject_text
+    assert '"chatenv>=0.2.9,<0.3.0"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text
     assert 'docs = ["mkdocs' not in pyproject_text

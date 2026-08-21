@@ -25,6 +25,8 @@ ChatPyPI: ChatArch Python package lifecycle helper extracted from ChatTool.
 pip install -e ".[dev]"
 chatpypi --help
 chatpypi --version
+chatpypi --tree
+chatpypi --tree-brief
 chatpypi pkg init demo-pkg
 python -m pytest -q
 python -m build
@@ -34,10 +36,16 @@ python -m build
 
 `ChatPyPI` is expanding from a pure package lifecycle helper into a "package + logged-in PyPI operations" tool. The current public tree is reserved as follows:
 
+`chatpypi --tree` uses the shared ChatStyle runtime and includes parameter signatures. `chatpypi --tree-brief` keeps command nodes and descriptions while omitting signatures.
+
 For the fully annotated command tree, see https://arch.gh.wzhecnu.cn/ChatPyPI/en/cli-tree/
 
 ```text
 chatpypi
+├── --help
+├── --version
+├── --tree
+├── --tree-brief
 ├── auth
 │   ├── login
 │   ├── logout
@@ -174,8 +182,9 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## CLI Contract
 
-This template depends on `chatstyle>=0.1.0,<0.2.0` and `chatenv>=0.2.0,<0.3.0`. New commands should prefer:
+This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.9,<0.3.0`. New commands should prefer:
 
+- `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` to render registered Click metadata.
 - `CommandSchema` / `CommandField` for inputs.
 - `add_interactive_option()` for the shared `-i/-I` switch.
 - `resolve_command_inputs()` for missing args, defaults, TTY behavior, and validation.

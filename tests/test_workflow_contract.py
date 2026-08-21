@@ -3,6 +3,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_ci_workflow_smokes_shared_tree_options():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "python -m chatpypi.cli --version" in workflow
+    assert "python -m chatpypi.cli --tree" in workflow
+    assert "python -m chatpypi.cli --tree-brief" in workflow
+
+
 def test_publish_workflow_is_tag_only_and_main_guarded():
     workflow = (ROOT / ".github" / "workflows" / "publish.yml").read_text(
         encoding="utf-8"
