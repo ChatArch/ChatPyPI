@@ -40,7 +40,9 @@ chatpypi init my-package -t chatarch --project-dir ./my-package
 - 接入 `mkdocs-static-i18n` suffix 模式。
 - 中文默认站点，英文内容放在 `.en.md` 文件和语言切换入口里。
 - 生成首页导航、CLI 树、能力地图和 Python 接口树。
+- 依赖 `chatstyle>=0.2.0,<0.3.0` 与 `chatenv>=0.2.9,<0.3.0`，并通过 ChatStyle 共享运行时提供 `--tree` 和 `--tree-brief`。
 - 生成 CI、发布、Preview Docs 和 Deploy Docs workflow。
+- CI 对生成包的 `--version`、`--tree` 和 `--tree-brief` 做 smoke readback。
 - PR preview 使用 `mike deploy dev`。
 - preview comment 使用 ChatArch Pages 域名。
 
@@ -62,6 +64,7 @@ chatpypi init my-package -t chatarch \
 - 模板文档可以是占位，但占位必须引导到正确结构：首页导航、CLI 树、能力地图和接口树。
 - 默认中文页面保持中文语境；英文内容只放在 `.en.md` 和语言切换入口里。
 - CLI 树回答“怎么调用”：真实命令树、命令状态、交互约定和更新清单；它是最直观的命令展示入口。
+- 默认 `--tree` 保留参数签名；`--tree-brief` 只保留命令节点和描述。
 - 能力地图回答“包负责什么”：一等能力、验证状态、能力边界和不负责的范围。
 - 生成包的 `pyproject.toml` docs extra 必须包含 `mkdocs-static-i18n`。
 - `mkdocs.yml` 必须启用 `attr_list` 和 `md_in_html`，支持 Material grid cards。

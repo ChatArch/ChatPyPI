@@ -371,7 +371,7 @@ def _build_chatarch_pyproject_content(
         'readme = "README.md"',
         f'requires-python = "{_toml_escape(requires_python)}"',
         f'license = "{_toml_escape(license_name)}"',
-        'dependencies = ["click>=8.0", "chatstyle>=0.1.0,<0.2.0", "chatenv>=0.2.0,<0.3.0"]',
+        'dependencies = ["click>=8.0", "chatstyle>=0.2.0,<0.3.0", "chatenv>=0.2.9,<0.3.0"]',
     ]
     if author and email:
         lines.append(
@@ -619,14 +619,17 @@ def _build_chatarch_readme(
 pip install -e \".[dev]"
 {module_name} --help
 {module_name} --version
+{module_name} --tree
+{module_name} --tree-brief
 python -m pytest -q
 python -m build
 ```
 
 ## 命令行规范
 
-这个模板默认依赖 `chatstyle>=0.1.0,<0.2.0` 和 `chatenv>=0.2.0,<0.3.0`，新增命令应优先使用：
+这个模板默认依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.9,<0.3.0`，新增命令应优先使用：
 
+- `add_tree_option()` 提供共享的 `--tree` / `--tree-brief`，`render_click_tree()` 从已注册 Click 元数据生成命令树。
 - `CommandSchema` / `CommandField` 描述输入。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
@@ -691,14 +694,17 @@ Choose documentation by scenario:
 pip install -e \".[dev]"
 {module_name} --help
 {module_name} --version
+{module_name} --tree
+{module_name} --tree-brief
 python -m pytest -q
 python -m build
 ```
 
 ## CLI Contract
 
-This template depends on `chatstyle>=0.1.0,<0.2.0` and `chatenv>=0.2.0,<0.3.0`. New commands should prefer:
+This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.9,<0.3.0`. New commands should prefer:
 
+- `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` to render registered Click metadata.
 - `CommandSchema` / `CommandField` for inputs.
 - `add_interactive_option()` for the shared `-i/-I` switch.
 - `resolve_command_inputs()` for missing args, defaults, TTY behavior, and validation.
@@ -722,7 +728,8 @@ def _build_chatarch_develop_md() -> str:
 
             ## CLI Rules
 
-            - Use `chatstyle>=0.1.0,<0.2.0` and `chatenv>=0.2.0,<0.3.0` as the canonical CLI interaction runtime.
+            - Use `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.9,<0.3.0` as the canonical CLI interaction runtime.
+            - Use `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` for programmatic Click-tree readback.
             - Prefer `CommandSchema`, `CommandField`, `add_interactive_option()`, and `resolve_command_inputs()` for new commands.
             - Missing required args should auto-enter interactive mode when recoverable.
             - `-i` forces interactive mode; `-I` disables prompting and must fail fast.
@@ -760,92 +767,20 @@ def _build_chatarch_cli_py(module_name: str) -> str:
 
             from __future__ import annotations
 
-            import inspect
-
             import click
+            from chatstyle import add_tree_option
 
             from {module_name} import __version__
 
 
-            def _purpose(command: click.Command) -> str:
-                text = command.short_help or inspect.getdoc(command.callback) or ""
-                return " ".join(text.strip().split()).rstrip(".")
-
-
-            def _parameter_piece(parameter: click.Parameter) -> str | None:
-                if getattr(parameter, "hidden", False) or parameter.name == "help":
-                    return None
-                if isinstance(parameter, click.Argument):
-                    piece = parameter.name.upper().replace("_", "-")
-                    if not parameter.required:
-                        piece = f"[{{piece}}]"
-                    if parameter.nargs == -1:
-                        piece = f"{{piece}}..."
-                    return piece
-                if not isinstance(parameter, click.Option):
-                    return None
-                option_names = [name for name in (*parameter.opts, *parameter.secondary_opts) if name.startswith("--")]
-                if not option_names:
-                    option_names = [name for name in (*parameter.opts, *parameter.secondary_opts) if name.startswith("-")]
-                if not option_names:
-                    return None
-                if parameter.is_flag or parameter.flag_value is not None:
-                    piece = "/".join(option_names)
-                else:
-                    metavar = parameter.metavar or parameter.name.upper().replace("_", "-")
-                    piece = f"{{'/'.join(option_names)}} {{metavar}}"
-                if not parameter.required:
-                    piece = f"[{{piece}}]"
-                return piece
-
-
-            def _command_signature(name: str, command: click.Command) -> str:
-                pieces = [piece for piece in (_parameter_piece(parameter) for parameter in command.params) if piece]
-                return " ".join([name, *pieces])
-
-
-            def _render_command_tree(command: click.Command, name: str, prefix: str, is_last: bool, lines: list[str]) -> None:
-                connector = "└── " if is_last else "├── "
-                line = f"{{prefix}}{{connector}}{{_command_signature(name, command)}}"
-                purpose = _purpose(command)
-                if purpose:
-                    line = f"{{line}}  # {{purpose}}"
-                lines.append(line)
-                if not isinstance(command, click.Group):
-                    return
-                children = [(child_name, child) for child_name, child in command.commands.items() if not child.hidden]
-                child_prefix = prefix + ("    " if is_last else "│   ")
-                for index, (child_name, child) in enumerate(children):
-                    _render_command_tree(child, child_name, child_prefix, index == len(children) - 1, lines)
-
-
-            def _render_cli_tree(root: click.Group) -> str:
-                children = [(name, command) for name, command in root.commands.items() if not command.hidden]
-                lines = [f"{module_name}  # {{_purpose(root)}}"]
-                root_options = [
-                    ("--help", "Show help for the current command."),
-                    ("--version", "Show package version."),
-                    ("--tree", "Print the registered CLI tree."),
-                ]
-                for index, (option, purpose) in enumerate(root_options):
-                    is_last = not children and index == len(root_options) - 1
-                    lines.append(f"{{'└──' if is_last else '├──'}} {{option}}  # {{purpose}}")
-                for index, (child_name, child) in enumerate(children):
-                    _render_command_tree(child, child_name, "", index == len(children) - 1, lines)
-                return "\\n".join(lines)
-
-
-            @click.group(invoke_without_command=True, no_args_is_help=True)
+            @click.group(name="{module_name}", invoke_without_command=True, no_args_is_help=True)
             @click.version_option(__version__, prog_name="{module_name}")
-            @click.option("--tree", "show_tree", is_flag=True, is_eager=True, help="Print the registered CLI tree.")
-            @click.pass_context
-            def main(ctx: click.Context, show_tree: bool) -> None:
+            @add_tree_option(renderer_options={{"root_name": "{module_name}"}})
+            def main() -> None:
                 \"\"\"{module_name} command line interface.\"\"\"
                 # Add package-specific commands here. Prefer ChatStyle helpers for
                 # interactive input when a command needs recoverable user input.
-                if show_tree:
-                    click.echo(_render_cli_tree(ctx.command))
-                    ctx.exit()
+                pass
 
 
             if __name__ == "__main__":
@@ -873,14 +808,32 @@ def _build_chatarch_test_cli_py(module_name: str) -> str:
                 assert f"{module_name}, version {{__version__}}" in result.output
 
 
+            def test_help_lists_shared_tree_options():
+                result = CliRunner().invoke(main, ["--help"])
+
+                assert result.exit_code == 0
+                assert "--tree" in result.output
+                assert "--tree-brief" in result.output
+
+
             def test_tree_option_prints_registered_cli_tree():
                 result = CliRunner().invoke(main, ["--tree"])
 
                 assert result.exit_code == 0, result.output
-                assert "{module_name}  # {module_name} command line interface" in result.output
-                assert "├── --help  # Show help for the current command." in result.output
-                assert "├── --version  # Show package version." in result.output
-                assert "└── --tree  # Print the registered CLI tree." in result.output
+                assert result.output.startswith("{module_name}\\n")
+                assert "├── --help" in result.output
+                assert "├── --version" in result.output
+                assert "├── --tree" in result.output
+                assert "└── --tree-brief" in result.output
+
+
+            def test_tree_brief_option_prints_registered_cli_tree():
+                result = CliRunner().invoke(main, ["--tree-brief"])
+
+                assert result.exit_code == 0, result.output
+                assert result.output.startswith("{module_name}\\n")
+                assert "├── --tree" in result.output
+                assert "└── --tree-brief" in result.output
             """
         ).strip()
         + "\n"
@@ -1045,7 +998,8 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
             {module_name}                  # {package_name} 命令行入口
             ├── --help                     # 显示 CLI 帮助和已注册命令
             ├── --version                  # 输出当前包版本
-            └── --tree                     # 输出真实已注册 CLI 树
+            ├── --tree                     # 输出真实已注册 CLI 树和参数签名
+            └── --tree-brief               # 输出命令节点和描述，不含参数签名
             ```
 
             ## 基础入口
@@ -1053,10 +1007,11 @@ def _build_chatarch_docs_cli_tree(package_name: str, module_name: str) -> str:
             ```text
             {module_name} --help           # 验证命令已安装，并查看当前命令树
             {module_name} --version        # 验证当前安装版本
-            {module_name} --tree           # 回读真实 CLI contract
+            {module_name} --tree           # 回读带参数签名的真实 CLI contract
+            {module_name} --tree-brief     # 回读不含参数签名的简明命令树
             ```
 
-            `--help`、`--version` 和 `--tree` 是模板默认可验证入口。新增业务命令后，应像 ChatTea 的 CLI 树一样，把命令组单独展开，并给每个命令写一行注释。
+            `--help`、`--version`、`--tree` 和 `--tree-brief` 是模板默认可验证入口。两个树选项由 ChatStyle 的 `add_tree_option()` 提供；默认树保留参数签名，简明树只保留命令节点和描述。新增业务命令后，应像 ChatTea 的 CLI 树一样，把命令组单独展开，并给每个命令写一行注释。
 
             ## 业务命令槽位
 
@@ -1103,7 +1058,8 @@ def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str
             {module_name}                  # {package_name} command-line entry
             ├── --help                     # Show CLI help and registered commands
             ├── --version                  # Print the current package version
-            └── --tree                     # Print the actual registered CLI tree
+            ├── --tree                     # Print the registered CLI tree with parameter signatures
+            └── --tree-brief               # Print command nodes and descriptions without signatures
             ```
 
             ## Base Entries
@@ -1111,10 +1067,11 @@ def _build_chatarch_docs_cli_tree_en(package_name: str, module_name: str) -> str
             ```text
             {module_name} --help           # Verify the command is installed and inspect the current command tree
             {module_name} --version        # Verify the installed version
-            {module_name} --tree           # Read back the actual CLI contract
+            {module_name} --tree           # Read back the CLI contract with parameter signatures
+            {module_name} --tree-brief     # Read back command nodes and descriptions only
             ```
 
-            `--help`, `--version`, and `--tree` are the scaffolded verification entries. After adding business commands, follow the ChatTea CLI tree pattern: split command groups into their own sections and annotate every command line.
+            `--help`, `--version`, `--tree`, and `--tree-brief` are the scaffolded verification entries. ChatStyle's `add_tree_option()` provides both tree flags: the default tree keeps parameter signatures, while the brief tree keeps only command nodes and descriptions. After adding business commands, follow the ChatTea CLI tree pattern: split command groups into their own sections and annotate every command line.
 
             ## Business Command Slots
 
@@ -1159,7 +1116,7 @@ def _build_chatarch_docs_capability_map(package_name: str, module_name: str) -> 
 
             - **命令行入口**
 
-                `{module_name} --help` 和 `{module_name} --version` 是默认可验证入口。
+                `{module_name} --help`、`{module_name} --version`、`{module_name} --tree` 和 `{module_name} --tree-brief` 是默认可验证入口。
 
             - **Python 接口**
 
@@ -1175,7 +1132,7 @@ def _build_chatarch_docs_capability_map(package_name: str, module_name: str) -> 
 
             | 能力 | 状态 | 说明 |
             | --- | --- | --- |
-            | 命令行基础入口 | 已实现 | 模板生成 Click group、`--version` 和基础测试。 |
+            | 命令行基础入口 | 已实现 | 模板生成 Click group、`--version`、ChatStyle 共享树选项和基础测试。 |
             | ChatEnv 配置提供者 | 已实现 | 默认生成 `config.py` 和 `chatenv.configs` 入口点。 |
             | 业务命令 | 未实现 | 按当前包真实需求补充，不能在模板里伪造未来命令。 |
 
@@ -1204,7 +1161,7 @@ def _build_chatarch_docs_capability_map_en(package_name: str, module_name: str) 
 
             - **CLI Entry**
 
-                `{module_name} --help` and `{module_name} --version` are the default verification entry points.
+                `{module_name} --help`, `{module_name} --version`, `{module_name} --tree`, and `{module_name} --tree-brief` are the default verification entry points.
 
             - **Python API**
 
@@ -1220,7 +1177,7 @@ def _build_chatarch_docs_capability_map_en(package_name: str, module_name: str) 
 
             | Capability | Status | Notes |
             | --- | --- | --- |
-            | CLI base entry | Implemented | The template generates a Click group, `--version`, and a base test. |
+            | CLI base entry | Implemented | The template generates a Click group, `--version`, shared ChatStyle tree options, and base tests. |
             | ChatEnv provider | Implemented | The template generates `config.py` and a `chatenv.configs` entry point. |
             | Business commands | Not implemented | Add these from the real package domain; do not fake future commands in the template. |
 
@@ -1598,11 +1555,15 @@ def scaffold_package(
                           - run: python -m pip install --upgrade pip
                           - run: python -m pip install -e ".[dev,docs]"
                           - run: python -m pytest -q
+                          - run: python -m {module_name}.cli --version
+                          - run: python -m {module_name}.cli --tree
+                          - run: python -m {module_name}.cli --tree-brief
                           - run: python -m build
                           - run: mkdocs build --strict
                     """
                 )
                 .replace("{workflow_python_version}", workflow_python_version)
+                .replace("{module_name}", module_name)
                 .strip()
                 + "\n",
                 project_dir / ".github" / "workflows" / "publish.yml": textwrap.dedent(

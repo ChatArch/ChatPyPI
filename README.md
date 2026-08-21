@@ -25,6 +25,8 @@ ChatPyPI: ChatArch Python package lifecycle helper extracted from ChatTool.
 pip install -e ".[dev]"
 chatpypi --help
 chatpypi --version
+chatpypi --tree
+chatpypi --tree-brief
 chatpypi pkg init demo-pkg
 python -m pytest -q
 python -m build
@@ -34,10 +36,16 @@ python -m build
 
 `ChatPyPI` 正在从单纯的包生命周期工具，扩展为“包 + 登录后 PyPI 操作”工具。当前公共树结构已经预留：
 
+`chatpypi --tree` 使用 ChatStyle 共享运行时输出带参数签名的注册树；`chatpypi --tree-brief` 保留命令节点和描述，但省略参数签名。
+
 完整带注释的命令树见文档站： https://arch.gh.wzhecnu.cn/ChatPyPI/cli-tree/
 
 ```text
 chatpypi
+├── --help
+├── --version
+├── --tree
+├── --tree-brief
 ├── auth
 │   ├── login
 │   ├── logout
@@ -170,8 +178,9 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## 命令行规范
 
-这个模板默认依赖 `chatstyle>=0.1.0,<0.2.0` 和 `chatenv>=0.2.0,<0.3.0`，新增命令应优先使用：
+这个模板默认依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.9,<0.3.0`，新增命令应优先使用：
 
+- `add_tree_option()` 提供共享的 `--tree` / `--tree-brief`，`render_click_tree()` 从已注册 Click 元数据生成命令树。
 - `CommandSchema` / `CommandField` 描述输入。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。

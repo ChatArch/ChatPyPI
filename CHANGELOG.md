@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.11 - 2026-08-21
+
+### Added
+
+- Add `chatpypi --tree-brief` and scaffold it into generated ChatArch CLIs so command nodes and descriptions can be read without parameter signatures.
+
+### Changed
+
+- Move ChatPyPI and generated ChatArch CLI tree output to ChatStyle's shared `add_tree_option()` / `render_click_tree()` runtime.
+- Raise the supported runtime bounds to `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.9,<0.3.0`.
+- Smoke-test `--version`, `--tree`, and `--tree-brief` in ChatPyPI's CI and generated ChatArch CI workflows.
+
 ## 0.2.10 - 2026-08-12
 
 ### Fixed
