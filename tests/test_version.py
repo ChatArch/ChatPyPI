@@ -12,7 +12,7 @@ from chatpypi.config import (
 
 
 def test_version_present():
-    assert __version__ == "0.2.11"
+    assert __version__ == "0.2.12"
 
 
 def test_public_package_api_exports_core_helpers(tmp_path):
@@ -56,7 +56,7 @@ def test_runtime_dependencies_use_current_bounds():
     assert '"twine>=6.0.0,<7.0.0"' in text
     assert '"requests>=2.31.0,<3.0.0"' in text
     assert '"chatstyle>=0.2.0,<0.3.0"' in text
-    assert '"chatenv>=0.2.9,<0.3.0"' in text
+    assert '"chatenv>=0.2.11,<0.3.0"' in text
 
 
 def test_chatenv_provider_entry_point_declared():

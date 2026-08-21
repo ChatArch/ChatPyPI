@@ -18,7 +18,7 @@
 
 预期过程和结果：
   1. 执行 `chatpypi --version`。
-  2. 预期输出当前包版本 `chatpypi, version 0.2.11`。
+  2. 预期输出当前包版本 `chatpypi, version 0.2.12`。
 
 参考执行脚本（伪代码）：
 
@@ -51,7 +51,7 @@ chatpypi --version
   3. 预期生成 `.github/workflows/ci.yml`、`publish.yml`、`deploy.yaml`、`preview.yaml`。
   4. 默认 README 使用中文，并在开头包含 PyPI version、GitHub Actions 和 mkdocs docs badge；badge、`pyproject.toml` URL 与 `mkdocs.yml` 仓库链接默认指向 `ChatArch/<package>`，文档站默认使用 `arch.gh.wzhecnu.cn/<package>/`。
   5. `publish.yml` 只应由 `v*` tag 触发，不应由普通分支 push 或手动 `workflow_dispatch` 触发。
-  6. 生成包应依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.9,<0.3.0`，使用 ChatStyle 共享树运行时，并提供保留参数签名的 `--tree` 与省略参数签名的 `--tree-brief`；生成 CI 应 smoke-test 两种树输出。
+  6. 生成包应依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.11,<0.3.0`，使用 ChatStyle 共享树运行时，并提供保留参数签名的 `--tree` 与省略参数签名的 `--tree-brief`；生成 CI 应 smoke-test 两种树输出。
   7. 这些文件应体现 CLI 规范、开发规范、文档/测试约定、MkDocs i18n 语言切换、首页非线性导航、CLI 树、能力地图、PR preview 和自动化基础说明。
   8. 可通过 `--without-mkdocs` 跳过 mkdocs/docs 文件，通过 `--without-workflows` 跳过 `.github/workflows/`；可用 `--docs-domain` 调整文档 URL 和 preview 域名。
 

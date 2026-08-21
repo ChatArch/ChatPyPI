@@ -110,7 +110,7 @@ def test_chatpypi_init_chatarch_template_interactive(
         encoding="utf-8"
     )
     assert '"chatstyle>=0.2.0,<0.3.0"' in pyproject_text
-    assert '"chatenv>=0.2.9,<0.3.0"' in pyproject_text
+    assert '"chatenv>=0.2.11,<0.3.0"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'demo_pkg = "demo_pkg.config"' in pyproject_text
     assert (tmp_path / "demo-pkg" / "src" / "demo_pkg" / "config.py").exists()

@@ -40,7 +40,7 @@ chatpypi init my-package -t chatarch --project-dir ./my-package
 - 接入 `mkdocs-static-i18n` suffix 模式。
 - 中文默认站点，英文内容放在 `.en.md` 文件和语言切换入口里。
 - 生成首页导航、CLI 树、能力地图和 Python 接口树。
-- 依赖 `chatstyle>=0.2.0,<0.3.0` 与 `chatenv>=0.2.9,<0.3.0`，并通过 ChatStyle 共享运行时提供 `--tree` 和 `--tree-brief`。
+- 依赖 `chatstyle>=0.2.0,<0.3.0` 与 `chatenv>=0.2.11,<0.3.0`，并通过 ChatStyle 共享运行时提供 `--tree` 和 `--tree-brief`。
 - 生成 CI、发布、Preview Docs 和 Deploy Docs workflow。
 - CI 对生成包的 `--version`、`--tree` 和 `--tree-brief` 做 smoke readback。
 - PR preview 使用 `mike deploy dev`。
