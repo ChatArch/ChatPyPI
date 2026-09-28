@@ -263,6 +263,16 @@ def test_planned_operational_commands_fail_nonzero():
     assert "not implemented yet" in result.output
 
 
+def test_chatpypi_auth_login_help_lists_distinct_email_and_http_timeouts():
+    result = CliRunner().invoke(cli, ["auth", "login", "--help"])
+
+    assert result.exit_code == 0
+    assert "--wait-email" in result.output
+    assert "--wait-timeout FLOAT" in result.output
+    assert "--timeout FLOAT" in result.output
+    assert "requires --wait-email" in result.output
+
+
 def test_chatpypi_auth_login_writes_real_session_via_login_helper(tmp_path, monkeypatch):
     token_file = tmp_path / "home" / "tokens" / "PyPI" / "default.json"
     monkeypatch.setenv("CHATARCH_HOME", str(tmp_path / "home"))

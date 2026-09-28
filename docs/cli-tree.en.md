@@ -53,7 +53,7 @@ chatpypi probe            # Compatibility alias for `chatpypi pkg probe`
 
 ```text
 chatpypi auth             # Session, account, and assisted bootstrap flows
-├── login                 # Login with username/password/TOTP and write session token
+├── login                 # Login with username/password/TOTP; optionally wait once for an email link
 ├── logout                # Clear the local session token
 ├── whoami                # Read back the current account summary from session
 ├── register              # Planned / checkpoint: account registration
@@ -67,7 +67,7 @@ chatpypi auth             # Session, account, and assisted bootstrap flows
     └── clear             # Clear session token
 ```
 
-Authentication commands must respect the security boundary: passwords, TOTP secrets, session tokens, and cookies are only read/written through env/profile/private stores, and neither CLI output nor docs may reveal real values. `auth login`, `auth whoami`, and `auth session show|clear` are the current implemented paths. Registration, email verification, 2FA setup, and recovery codes remain human checkpoints.
+Authentication commands must respect the security boundary: passwords, TOTP secrets, session tokens, cookies, and email confirmation links remain in memory/env/profile/private stores and are never echoed. `auth login --wait-email --wait-timeout 600` can wait once for a hidden new-device confirmation link; non-TTY use fails before credentials/network and JSON-mode prompts stay on stderr. The selected token profile is written only after confirmation and actual account-page username verification. Registration, email-address verification, 2FA setup, and recovery codes remain human checkpoints.
 
 ## Projects and Trusted Publisher
 

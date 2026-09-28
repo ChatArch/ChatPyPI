@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add opt-in `chatpypi auth login --wait-email --wait-timeout 600` handling for the PyPI new-device email confirmation checkpoint, with one bounded hidden terminal prompt and explicit required/timeout/cancelled/invalid/auth/network failures.
+- Add a reusable `login_to_pypi(..., confirmation_provider=..., confirmation_timeout=...)` callback API for in-process automation.
+
+### Security
+
+- Strictly validate official PyPI confirmation origins and link structure before consuming a token, keep the login Session and frozen proxy selection, constrain redirects to the same origin without token Referer propagation, and verify the actual authenticated account username before any CLI token-store write.
+- Fail unsupported/non-TTY terminal waits before credential lookup or network access, and restore scoped POSIX signal, timer, and terminal state after hidden input timeout or cancellation.
+
 ## 0.2.12 - 2026-08-21
 
 ### Changed

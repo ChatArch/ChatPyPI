@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
 import sys
 
 import click
+from click.core import ParameterSource
 
 from chatpypi import __version__
 from chatpypi.config import load_pypi_env_profile
@@ -26,7 +28,9 @@ from chatpypi.session_ops import (
     save_session_payload_to_token_store,
     session_token_profile,
     validate_session_payload,
+    validate_email_confirmation_base_url,
 )
+from chatpypi.prompt_ops import ask_email_confirmation_url, preflight_email_confirmation_prompt
 from chatstyle import INTERACTIVE_OPTION_HELP
 from chatstyle import (
     abort_if_force_without_tty,
@@ -798,6 +802,18 @@ def probe(
 @click.option("--base-url", default="https://pypi.org", show_default=True, help="PyPI base URL.")
 @click.option("--timeout", type=float, default=20.0, show_default=True, help="HTTP timeout in seconds.")
 @click.option(
+    "--wait-email",
+    is_flag=True,
+    help="Wait once for a hidden PyPI email confirmation link when required.",
+)
+@click.option(
+    "--wait-timeout",
+    type=float,
+    default=600.0,
+    show_default=True,
+    help="Finite terminal email-confirmation wait in seconds (requires --wait-email).",
+)
+@click.option(
     "--format",
     "output_format",
     type=click.Choice(["text", "json"]),
@@ -805,7 +821,9 @@ def probe(
     show_default=True,
     help="Output format.",
 )
+@click.pass_context
 def auth_login(
+    ctx: click.Context,
     username: str | None,
     password_env: str,
     totp_env: str | None,
@@ -813,9 +831,23 @@ def auth_login(
     write_token: bool,
     base_url: str,
     timeout: float,
+    wait_email: bool,
+    wait_timeout: float,
     output_format: str,
 ):
     """Log in to PyPI and refresh token-backed PyPI web-session state."""
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise click.ClickException("--timeout must be a positive finite number of seconds.")
+    if not math.isfinite(wait_timeout) or wait_timeout <= 0:
+        raise click.ClickException("--wait-timeout must be a positive finite number of seconds.")
+    if not wait_email and ctx.get_parameter_source("wait_timeout") is ParameterSource.COMMANDLINE:
+        raise click.ClickException("--wait-timeout requires --wait-email.")
+    if wait_email:
+        try:
+            validate_email_confirmation_base_url(base_url)
+            preflight_email_confirmation_prompt()
+        except (RuntimeError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from None
     profile_values = _load_env_profile_values(env_profile)
     username = (
         profile_values.get("PYPI_USERNAME")
@@ -834,16 +866,27 @@ def auth_login(
         totp_secret = profile_values.get(totp_env) if env_profile else os.environ.get(totp_env)
         if not totp_secret:
             totp_secret = os.environ.get(totp_env)
-    try:
-        payload, _session_token = login_to_pypi(
-            username=username,
-            password=password or "",
-            totp_secret=totp_secret,
-            base_url=base_url,
-            timeout=timeout,
+    login_kwargs = {
+        "username": username,
+        "password": password or "",
+        "totp_secret": totp_secret,
+        "base_url": base_url,
+        "timeout": timeout,
+    }
+    if wait_email:
+        login_kwargs.update(
+            {
+                "confirmation_provider": ask_email_confirmation_url,
+                "confirmation_timeout": wait_timeout,
+            }
         )
+    session_error = None
+    try:
+        payload, _session_token = login_to_pypi(**login_kwargs)
     except PyPISessionError as exc:
-        raise click.ClickException(str(exc)) from exc
+        session_error = str(exc)
+    if session_error is not None:
+        raise click.ClickException(session_error) from None
     token_status = None
     if write_token:
         token_status = save_session_payload_to_token_store(payload, env_profile=env_profile)
@@ -857,7 +900,7 @@ def auth_login(
     if output_format == "json":
         _echo_json(summary)
         return
-    click.echo(f"Logged in as {username}")
+    click.echo(f"Logged in as {payload.get('username')}")
     if token_status is not None:
         click.echo(f"updated_token_profile={summary['token_profile']}")
         click.echo(f"token_file={token_status['token_file']}")

@@ -101,7 +101,7 @@ chatpypi
 Current implementation focus:
 
 - `pkg`: package init/build/check/upload/probe
-- `auth login`: log in to PyPI with username/password and optional TOTP, then refresh the parallel ChatEnv token profile
+- `auth login`: log in with username/password and optional TOTP; it can explicitly wait once for an email confirmation link and verifies the actual account before refreshing the parallel ChatEnv token profile
 - `auth whoami` / `auth session show|clear`: validate the saved session and show non-sensitive local summaries
 - `project list`: read the logged-in account's PyPI projects page
 - `publisher list` / `publisher detail`: read account-level and project-level Trusted Publisher state
@@ -109,7 +109,7 @@ Current implementation focus:
 - `publisher pending-list` / `pending-add` / `pending-remove`: only for truly pending pre-registration exceptions or stale pending cleanup; this is not the default Publisher path
 - `docs`: documentation links and example commands
 
-Registration, email verification, 2FA bootstrap, token create/revoke, and other flows that need human validation, QR/device checks, or complex checkpoints remain checkpoint-aware. Publisher writes for existing PyPI projects should not be pending; use `publisher add-github` and read back the active publisher.
+The new-device email checkpoint during login now has an explicit bounded wait. Account registration, email-address verification, 2FA bootstrap, token create/revoke, and other flows that need human validation, QR/device checks, or complex checkpoints remain checkpoint-aware. Publisher writes for existing PyPI projects should not be pending; use `publisher add-github` and read back the active publisher.
 
 Legacy shortcuts remain available:
 
@@ -160,6 +160,7 @@ Recommended rules:
 - `--token-env` / `--password-env` accept an env var name, and the CLI resolves
   the secret value at runtime;
 - Web session state is dynamic runtime state and is written back to the ChatEnv token profile by `chatpypi auth login`; use `-e/--env-profile NAME` to read or write the same named token profile without activating it globally; the CLI only prints non-sensitive summaries instead of raw cookies;
+- when a new device requires email confirmation, opt in with `--wait-email --wait-timeout 600`. The CLI reads one hidden HTTPS `/account/confirm-login/?token=...` link for the selected official PyPI origin. It does not read mail, poll, re-login, or resend email. Non-TTY or unsupported POSIX-timer environments should use the Python callback API;
 - if a `.env` file contains values with spaces, avoid blindly running
   `source .env`; parse it safely instead.
 
@@ -172,6 +173,7 @@ read -rsp "PyPI TOTP secret: " PYPI_TOTP_SECRET; echo; export PYPI_TOTP_SECRET
 read -rsp "PyPI API token: " PYPI_API_TOKEN; echo; export PYPI_API_TOKEN
 
 chatpypi auth login --password-env PYPI_PASSWORD --totp-env PYPI_TOTP_SECRET
+chatpypi auth login -e PROFILE --wait-email --wait-timeout 600
 chatpypi auth whoami --format json
 chatpypi project list --format json
 chatpypi publisher list --format json
@@ -179,6 +181,8 @@ chatpypi publisher pending-list --format json
 chatpypi auth session show --format json
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
+
+Automation can call `chatpypi.session_ops.login_to_pypi(..., confirmation_provider=callback, confirmation_timeout=600)`. The callback receives a safe `EmailConfirmationCheckpoint` and the remaining seconds, then returns the complete confirmation link. Arbitrary third-party Python callbacks must honor that deadline themselves: the API checks expiry before and after the call but cannot forcibly interrupt arbitrary Python code. CLI token-store writes happen only after confirmation, authenticated-account identity verification, and username matching all succeed.
 
 ## CLI Contract
 

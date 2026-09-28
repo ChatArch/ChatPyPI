@@ -101,7 +101,7 @@ chatpypi
 当前实现重点：
 
 - `pkg`：包初始化、构建、检查、上传、探测
-- `auth login`：使用用户名、密码和可选 TOTP 获取真实 PyPI 登录 session，并写入 ChatEnv token profile
+- `auth login`：使用用户名、密码和可选 TOTP 获取真实 PyPI 登录 session；可显式等待一次邮件确认链接，最终核验实际账号后再写入 ChatEnv token profile
 - `auth whoami` / `auth session show|clear`：真实 session 验证与本地 session 摘要读取
 - `project list`：读取登录账号的 PyPI projects 页面
 - `publisher list` / `publisher detail`：读取账号级和项目级 Trusted Publisher 状态
@@ -109,7 +109,7 @@ chatpypi
 - `publisher pending-list` / `pending-add` / `pending-remove`：仅用于真正 pending 的注册/占位前例外流程或清理 stale pending；不是普通 Publisher 默认路径
 - `docs`：输出文档链接与示例命令
 
-注册、邮箱验证、2FA 初始化、token 创建/删除等需要人工验证、二维码、2FA 或复杂 checkpoint 的流程仍按 checkpoint / browser-assist 边界处理。已存在 PyPI project 的 Publisher 写操作不应 pending：应直接用 `publisher add-github` 完成并读回确认。
+登录中新设备触发的邮件确认 checkpoint 已支持显式等待；账号注册、邮箱地址验证、2FA 初始化、token 创建/删除等需要人工验证、二维码或复杂 checkpoint 的流程仍按 checkpoint / browser-assist 边界处理。已存在 PyPI project 的 Publisher 写操作不应 pending：应直接用 `publisher add-github` 完成并读回确认。
 
 旧命令仍兼容：
 
@@ -157,6 +157,7 @@ chatenv new -t pypi default
 - 不要把 token、密码直接写进命令行参数；
 - `--token-env` / `--password-env` 只接收“环境变量名”，CLI 会在运行时读取其值；
 - Web session 属于动态 runtime state，由 `chatpypi auth login` 默认写回 ChatEnv token profile；可以用 `-e/--env-profile NAME` 指定读取/写入同名 token profile，而不切换全局默认；CLI 只输出非敏感摘要，不直接回显 cookie；
+- 新设备要求邮件确认时，显式使用 `--wait-email --wait-timeout 600`。CLI 只接受当前官方 PyPI origin 的 HTTPS `/account/confirm-login/?token=...` 链接，并用隐藏输入读取；它不会自动读取邮箱、轮询、重登录或重发邮件。非 TTY 或不支持安全 POSIX timer 的环境应使用 Python callback API；
 - `.env` 中若有包含空格的值，不要直接 `source .env`，应使用更安全的解析方式。
 
 示例：
@@ -168,6 +169,7 @@ read -rsp "PyPI TOTP secret: " PYPI_TOTP_SECRET; echo; export PYPI_TOTP_SECRET  
 read -rsp "PyPI API token: " PYPI_API_TOKEN; echo; export PYPI_API_TOKEN
 
 chatpypi auth login --password-env PYPI_PASSWORD --totp-env PYPI_TOTP_SECRET
+chatpypi auth login -e PROFILE --wait-email --wait-timeout 600
 chatpypi auth whoami --format json
 chatpypi project list --format json
 chatpypi publisher list --format json
@@ -175,6 +177,8 @@ chatpypi publisher pending-list --format json
 chatpypi auth session show --format json
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
+
+自动化可调用 `chatpypi.session_ops.login_to_pypi(..., confirmation_provider=callback, confirmation_timeout=600)`。callback 接收安全的 `EmailConfirmationCheckpoint` 和剩余秒数，并返回完整确认链接。任意第三方 Python callback 必须自行遵守 deadline；API 会在调用前后检查过期，但不承诺强制中断任意 Python 代码。失败、超时、取消、无效链接或账号不匹配时不会由 CLI 写入 token store。
 
 ## 命令行规范
 

@@ -53,7 +53,7 @@ chatpypi probe            # 兼容 `chatpypi pkg probe`
 
 ```text
 chatpypi auth             # 登录态、账号和引导型操作
-├── login                 # 用户名/密码/TOTP 登录，并写入 ChatEnv token profile
+├── login                 # 用户名/密码/TOTP 登录；可有界等待一次邮件确认链接
 ├── logout                # 清理本地 session token-store state
 ├── whoami                # 用 session 读回当前账号摘要
 ├── register              # 规划 / checkpoint：账号注册
@@ -67,7 +67,7 @@ chatpypi auth             # 登录态、账号和引导型操作
     └── clear             # 清理 session token-store state
 ```
 
-认证命令必须遵守安全边界：密码、TOTP secret、session runtime state、cookie 只通过 env/profile/private store 读取或写入，CLI 和文档都不能回显真实值。`auth login`、`auth whoami` 和 `auth session show|clear` 是当前已实现主路径；注册、邮箱验证、2FA 初始化和恢复码仍然是人工 checkpoint。
+认证命令必须遵守安全边界：密码、TOTP secret、session runtime state、cookie 和邮件确认链接只通过内存/env/profile/private store 处理，CLI 和文档都不能回显真实值。`auth login --wait-email --wait-timeout 600` 可在新设备检查点等待一次隐藏链接；非 TTY 会在凭据/网络前失败，`--format json` 的提示仍走 stderr。只有确认成功且 account 页实际用户名匹配后才写 token profile。注册、邮箱地址验证、2FA 初始化和恢复码仍然是人工 checkpoint。
 
 ## Project 和 Trusted Publisher
 
