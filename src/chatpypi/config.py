@@ -51,15 +51,22 @@ def resolve_pypi_proxy_url(
     env_profile: str | None = None,
     home: str | Path | None = None,
     profile_values: dict[str, str] | None = None,
+    allow_process_fallback: bool | None = None,
 ) -> str | None:
     """Resolve a PyPI-web-only proxy without modifying process-wide routing."""
+    if allow_process_fallback is None:
+        allow_process_fallback = env_profile is None and profile_values is None
     if proxy_url is not None:
         value = proxy_url
     elif profile_values is not None:
-        value = profile_values.get("PYPI_PROXY_URL") or os.getenv("PYPI_PROXY_URL")
+        value = profile_values.get("PYPI_PROXY_URL")
+        if not value and allow_process_fallback:
+            value = os.getenv("PYPI_PROXY_URL")
     elif env_profile is not None:
         values = load_pypi_env_profile(env_profile, home=home)
-        value = values.get("PYPI_PROXY_URL") or os.getenv("PYPI_PROXY_URL")
+        value = values.get("PYPI_PROXY_URL")
+        if not value and allow_process_fallback:
+            value = os.getenv("PYPI_PROXY_URL")
     else:
         value = os.getenv("PYPI_PROXY_URL") or load_active_pypi_env(home).get("PYPI_PROXY_URL")
     if value is None or value == "":

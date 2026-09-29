@@ -147,7 +147,7 @@ The minimum set currently falls into two categories:
   - `PYPI_USERNAME`: PyPI username for `chatpypi auth login`
   - `PYPI_PASSWORD`: PyPI password, read indirectly through `--password-env`
   - `PYPI_TOTP_SECRET`: optional TOTP secret for 2FA checkpoints
-  - `PYPI_PROXY_URL`: optional HTTP(S) proxy for PyPI web login/management only. A selected profile takes precedence and overrides `NO_PROXY` for those requests, without changing global proxies or download indexes.
+  - `PYPI_PROXY_URL`: optional HTTP(S) proxy for PyPI web login/management only. A selected profile takes precedence and overrides `NO_PROXY` for those requests; a profile using it must also contain the matching `PYPI_USERNAME`. It does not change global proxies or download indexes.
   - Web session state: generated/refreshed by `chatpypi auth login` into `tokens/PyPI/<profile>.json`, parallel to `envs/PyPI/<profile>.env`
 - Manual uploads:
   - `PYPI_API_TOKEN`: PyPI API token used with `chatpypi pkg upload --token-env PYPI_API_TOKEN`

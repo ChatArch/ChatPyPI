@@ -977,7 +977,9 @@ def auth_login(
     profile_values = _load_env_profile_values(env_profile)
     proxy_invalid = False
     try:
-        proxy_url = resolve_pypi_proxy_url(profile_values=profile_values)
+        proxy_url = resolve_pypi_proxy_url(
+            profile_values=profile_values, allow_process_fallback=env_profile is None
+        )
     except (ValueError, TypeError):
         proxy_invalid, proxy_url = True, None
     if proxy_invalid:

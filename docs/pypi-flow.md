@@ -45,7 +45,7 @@ PYPI_PROXY_URL=http://proxy.example.invalid:8080
 
 该设置只用于 PyPI 网页登录与管理，包括 `auth whoami`、项目读取和 Publisher 操作；所选 profile 优先于同名进程环境变量，并覆盖这些请求的普通代理/`NO_PROXY` 选择。不修改父进程环境、uv/pip 下载镜像、Twine 上传地址或 GitHub OIDC 发布配置。未设置时保留现有代理行为。
 
-代理配置仍保存在稳定 env profile；加载会话时只在内存中绑定对应 profile 的传输配置，不复制到 token JSON。`chatenv token refresh PyPI <profile>` 同样采用该 profile 的出口；Python 调用方也可传 `login_to_pypi(..., proxy_url=...)`。
+代理配置仍保存在稳定 env profile；profile 使用该项时也必须包含与存储 session 相同账号的 `PYPI_USERNAME`，否则在发出请求前安全失败。加载会话时只在内存中绑定对应 profile 的传输配置，不复制到 token JSON。`chatenv token refresh PyPI <profile>` 同样采用该 profile 的出口；Python 调用方也可传 `login_to_pypi(..., proxy_url=...)`。
 
 稳定出口可避免因临时地址轮换而重复触发新来源确认，但不会绕过 PyPI 的安全策略；首次未认可的出口仍可能需要确认。不要输出代理 URL 中的账号/密码。
 

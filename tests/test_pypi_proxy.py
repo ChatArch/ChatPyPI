@@ -43,8 +43,8 @@ def test_bad_proxy_errors_never_retain_value_or_cause(value):
 def test_loaded_token_uses_matching_profile_without_serializing_proxy(tmp_path, monkeypatch):
     monkeypatch.setenv("NO_PROXY", "pypi.org")
     monkeypatch.setenv("no_proxy", "pypi.org")
-    save_profile(tmp_path, "alpha", PYPI_PROXY_URL=PROXY)
-    save_profile(tmp_path, "beta", PYPI_PROXY_URL="http://other.example.invalid:8080")
+    save_profile(tmp_path, "alpha", PYPI_USERNAME="alice", PYPI_PROXY_URL=PROXY)
+    save_profile(tmp_path, "beta", PYPI_USERNAME="bob", PYPI_PROXY_URL="http://other.example.invalid:8080")
     raw = {"provider": "pypi", "username": "alice", "base_url": "https://pypi.org", "cookies": []}
     session_ops.save_session_payload_to_token_store(raw, env_profile="alpha", home=tmp_path)
     loaded = session_ops.load_session_payload_from_token_store(env_profile="alpha", home=tmp_path)
@@ -117,3 +117,75 @@ def test_refresh_hook_passes_matching_profile_proxy(tmp_path, monkeypatch):
     monkeypatch.setattr(session_ops, "login_to_pypi", fake_login)
     session_ops.refresh_chatenv_token(service="PyPI", profile="alpha", home=tmp_path)
     assert seen["proxy_url"] == PROXY
+
+
+def test_named_profile_without_proxy_does_not_use_process_proxy(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYPI_PROXY_URL", "http://ambient.example.invalid:8080")
+    save_profile(tmp_path, "alpha", PYPI_USERNAME="alice")
+    assert config.resolve_pypi_proxy_url(
+        env_profile="alpha", home=tmp_path, allow_process_fallback=False
+    ) is None
+
+    raw = {"provider": "pypi", "username": "alice", "base_url": "https://pypi.org", "cookies": []}
+    session_ops.save_session_payload_to_token_store(raw, env_profile="alpha", home=tmp_path)
+    bound = session_ops.load_session_payload_from_token_store(
+        env_profile="alpha", home=tmp_path
+    )
+    session = session_ops.requests_session_from_payload(bound)
+    try:
+        assert session.proxies == {}
+    finally:
+        session.close()
+
+
+def test_named_profile_rejects_cross_account_session_before_proxy_binding(tmp_path):
+    save_profile(tmp_path, "alpha", PYPI_USERNAME="alice", PYPI_PROXY_URL=PROXY)
+    raw = {"provider": "pypi", "username": "mallory", "base_url": "https://pypi.org", "cookies": []}
+    session_ops.save_session_payload_to_token_store(raw, env_profile="alpha", home=tmp_path)
+    with pytest.raises(session_ops.PyPISessionError, match="does not match selected profile") as caught:
+        session_ops.load_session_payload_from_token_store(env_profile="alpha", home=tmp_path)
+    assert PROXY not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+def test_proxy_profile_requires_named_account_identity(tmp_path):
+    save_profile(tmp_path, "alpha", PYPI_PROXY_URL=PROXY)
+    raw = {"provider": "pypi", "username": "alice", "base_url": "https://pypi.org", "cookies": []}
+    session_ops.save_session_payload_to_token_store(raw, env_profile="alpha", home=tmp_path)
+    with pytest.raises(session_ops.PyPISessionError, match="missing PYPI_USERNAME") as caught:
+        session_ops.load_session_payload_from_token_store(env_profile="alpha", home=tmp_path)
+    assert PROXY not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda payload: session_ops.validate_session_payload(payload),
+        lambda payload: session_ops.list_projects_from_payload(payload),
+        lambda payload: session_ops.list_publishers_from_payload(payload),
+        lambda payload: session_ops.publisher_detail_from_payload(payload, "Demo"),
+        lambda payload: session_ops.add_github_publisher_to_project_from_payload(
+            payload, "Demo", owner="ChatArch", repository="Demo", workflow="publish.yml"
+        ),
+        lambda payload: session_ops.add_pending_github_publisher_from_payload(
+            payload, "Demo", owner="ChatArch", repository="Demo", workflow="publish.yml"
+        ),
+        lambda payload: session_ops.remove_pending_github_publisher_from_payload(
+            payload, "Demo", owner="ChatArch", repository="Demo", workflow="publish.yml"
+        ),
+    ],
+)
+def test_session_backed_proxy_failures_are_redacted_for_all_public_operations(monkeypatch, operation):
+    secret = "http://user:canary@private-proxy.example.invalid:8080"
+
+    def fail(*args, **kwargs):
+        raise requests.exceptions.ProxyError(f"cannot connect to {secret}")
+
+    monkeypatch.setattr(requests.Session, "get", fail)
+    monkeypatch.setattr(requests.Session, "post", fail)
+    with pytest.raises(session_ops.PyPINetworkError) as caught:
+        operation({"provider": "pypi", "base_url": "https://pypi.org", "cookies": []})
+    assert secret not in str(caught.value)
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None

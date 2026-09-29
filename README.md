@@ -146,7 +146,7 @@ chatenv new -t pypi default
   - `PYPI_USERNAME`：PyPI 用户名，用于 `chatpypi auth login`
   - `PYPI_PASSWORD`：PyPI 密码，只通过 `--password-env` 或 matching ChatEnv refresh provider 读取，不直接作为命令行值传入
   - `PYPI_TOTP_SECRET`：可选 TOTP secret，用于自动完成 2FA checkpoint
-  - `PYPI_PROXY_URL`：可选的 PyPI 网页登录/管理专用 HTTP(S) 代理，优先采用所选 profile 配置并覆盖该请求的 `NO_PROXY`；不修改全局代理或下载镜像。
+  - `PYPI_PROXY_URL`：可选的 PyPI 网页登录/管理专用 HTTP(S) 代理，优先采用所选 profile 配置并覆盖该请求的 `NO_PROXY`；profile 使用该项时也必须包含同账号的 `PYPI_USERNAME`，不修改全局代理或下载镜像。
   - Web 登录态 session：`chatpypi auth login` 或 `chatenv token refresh PyPI <profile>` 生成/刷新到 `tokens/PyPI/<profile>.json`，与 `envs/PyPI/<profile>.env` 一一对应
 - 手动发布：
   - `PYPI_API_TOKEN`：PyPI API token，配合 `chatpypi pkg upload --token-env PYPI_API_TOKEN`

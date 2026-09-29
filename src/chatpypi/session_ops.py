@@ -59,6 +59,31 @@ def _proxy_setting(**kwargs) -> str | None:
     return value
 
 
+def _selected_profile_proxy(
+    env_profile: str | None,
+    home: str | Path | None,
+    payload: dict[str, Any],
+) -> str | None:
+    """Bind a stored session only to its selected profile's safe transport."""
+    if env_profile is None:
+        return _proxy_setting(allow_process_fallback=True)
+    from chatpypi.config import load_pypi_env_profile
+
+    values = load_pypi_env_profile(env_profile, home=home)
+    proxy_url = _proxy_setting(profile_values=values, allow_process_fallback=False)
+    configured_username = str(values.get("PYPI_USERNAME") or "").strip()
+    stored_username = str(payload.get("username") or "").strip()
+    if proxy_url is not None and not configured_username:
+        raise PyPISessionError("PyPI proxy profile is missing PYPI_USERNAME.")
+    if configured_username and (
+        not stored_username
+        or not stored_username.isascii()
+        or configured_username.lower() != stored_username.lower()
+    ):
+        raise PyPISessionError("Stored PyPI session does not match selected profile.")
+    return proxy_url
+
+
 class EmailConfirmationRequiredError(PyPISessionError):
     """Raised when PyPI requires an email confirmation link."""
 
@@ -602,7 +627,7 @@ def refresh_chatenv_token(
     username = _required_profile_value(profile_values, "PYPI_USERNAME", profile=profile_name)
     password = _required_profile_value(profile_values, "PYPI_PASSWORD", profile=profile_name)
     totp_secret = profile_values.get("PYPI_TOTP_SECRET") or None
-    proxy_url = _proxy_setting(profile_values=profile_values)
+    proxy_url = _proxy_setting(profile_values=profile_values, allow_process_fallback=False)
     transport = {"proxy_url": proxy_url} if proxy_url is not None else {}
     try:
         payload, _session_token = login_to_pypi(
@@ -688,7 +713,7 @@ def load_session_payload_from_token_store(
         raise PyPISessionError("PyPI token store payload is not a valid session object.")
     if not isinstance(session_payload.get("cookies"), list):
         raise PyPISessionError("PyPI token store payload missing cookie list.")
-    return _BoundSessionPayload(session_payload, _proxy_setting(env_profile=env_profile, home=home))
+    return _BoundSessionPayload(session_payload, _selected_profile_proxy(env_profile, home, session_payload))
 
 
 def load_session_payload_from_env(
@@ -705,8 +730,9 @@ def load_session_payload_from_env(
     """
 
     if token:
+        decoded = decode_session_token(token)
         return _BoundSessionPayload(
-            decode_session_token(token), _proxy_setting(env_profile=env_profile, home=home)
+            decoded, _selected_profile_proxy(env_profile, home, decoded)
         )
     return load_session_payload_from_token_store(env_profile=env_profile, home=home)
 
@@ -729,7 +755,7 @@ def load_session_payload(session_file: Path | str) -> dict[str, Any]:
 def requests_session_from_payload(payload: dict[str, Any]) -> requests.Session:
     proxy_url = (
         payload._proxy_url if isinstance(payload, _BoundSessionPayload)
-        else _proxy_setting(profile_values={})
+        else _proxy_setting(allow_process_fallback=True)
     )
     session = requests.Session()
     if proxy_url is not None:
@@ -748,6 +774,24 @@ def requests_session_from_payload(payload: dict[str, Any]) -> requests.Session:
             path=item.get("path") or "/",
         )
     return session
+
+
+def _safe_session_request(
+    session: requests.Session,
+    method: str,
+    url: str,
+    **kwargs: Any,
+) -> requests.Response:
+    """Run session-backed management requests without exposing proxy failures."""
+    failed = False
+    try:
+        response = session.get(url, **kwargs) if method == "GET" else session.post(url, **kwargs)
+    except requests.RequestException:
+        failed, response = True, None
+    if failed:
+        raise PyPINetworkError()
+    assert response is not None
+    return response
 
 
 def _origin_from_url(url: str) -> str:
@@ -973,7 +1017,7 @@ def validate_session_payload(
 ) -> dict[str, Any]:
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
-    response = session.get(urljoin(base_url, "/manage/account/"), timeout=timeout)
+    response = _safe_session_request(session, "GET", urljoin(base_url, "/manage/account/"), timeout=timeout)
     _assert_logged_in_response(response)
     text = TextLinkParser()
     text.feed(response.text)
@@ -1190,7 +1234,7 @@ def list_projects_from_payload(
 ) -> dict[str, Any]:
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
-    response = session.get(urljoin(base_url, "/manage/projects/"), timeout=timeout)
+    response = _safe_session_request(session, "GET", urljoin(base_url, "/manage/projects/"), timeout=timeout)
     _assert_logged_in_response(response)
     projects = extract_project_names(response.text)
     return {
@@ -1441,7 +1485,7 @@ def add_pending_github_publisher_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _account_publishing_url(base_url)
-    before_response = session.get(url, timeout=timeout)
+    before_response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(before_response)
     before = parse_publishing_page(before_response.text)
     existing = find_pending_github_publisher(
@@ -1454,7 +1498,9 @@ def add_pending_github_publisher_from_payload(
         csrf = form.hidden_values().get("csrf_token")
         if csrf is None:
             raise PyPISessionError("Could not find CSRF token in GitHub pending publisher form.")
-        post = session.post(
+        post = _safe_session_request(
+            session,
+            "POST",
             _form_action_url(base_url, form, "/manage/account/publishing/"),
             data={
                 "csrf_token": csrf,
@@ -1507,7 +1553,7 @@ def remove_pending_github_publisher_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _account_publishing_url(base_url)
-    before_response = session.get(url, timeout=timeout)
+    before_response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(before_response)
     before = parse_publishing_page(before_response.text)
     pending = before.get("pending_publishers") or []
@@ -1531,7 +1577,9 @@ def remove_pending_github_publisher_from_payload(
     publisher_id = hidden.get("publisher_id")
     if not csrf or not publisher_id:
         raise PyPISessionError("Pending publisher remove form is missing CSRF token or publisher_id.")
-    post = session.post(
+    post = _safe_session_request(
+        session,
+        "POST",
         _form_action_url(base_url, form, "/manage/account/publishing/"),
         data={"csrf_token": csrf, "publisher_id": publisher_id},
         headers={"Referer": before_response.url, "Origin": base_url},
@@ -1559,7 +1607,7 @@ def publisher_detail_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _project_publishing_url(base_url, project)
-    response = session.get(url, timeout=timeout)
+    response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(response)
     parsed = parse_publishing_page(response.text)
     parsed.update({"capability": "session", "project": project, "source_url": response.url})
@@ -1587,7 +1635,7 @@ def add_github_publisher_to_project_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _project_publishing_url(base_url, project)
-    before_response = session.get(url, timeout=timeout)
+    before_response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(before_response)
     before = parse_publishing_page(before_response.text)
     existing = find_github_publisher(
@@ -1605,7 +1653,9 @@ def add_github_publisher_to_project_from_payload(
         if csrf is None:
             raise PyPISessionError("Could not find CSRF token in GitHub active publisher form.")
         post_url = _form_action_url(base_url, form, f"/manage/project/{project}/settings/publishing/")
-        post = session.post(
+        post = _safe_session_request(
+            session,
+            "POST",
             post_url,
             data={
                 "csrf_token": csrf,
@@ -1654,7 +1704,7 @@ def list_publishers_from_payload(
 ) -> dict[str, Any]:
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
-    response = session.get(urljoin(base_url, "/manage/account/publishing/"), timeout=timeout)
+    response = _safe_session_request(session, "GET", urljoin(base_url, "/manage/account/publishing/"), timeout=timeout)
     _assert_logged_in_response(response)
     parsed = parse_publishing_page(response.text)
     parsed.update({"capability": "session", "source_url": response.url})
