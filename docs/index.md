@@ -11,6 +11,7 @@ ChatPyPI 是 ChatArch 的 Python 包生命周期和 PyPI 自动化命令行工�
 | 一眼查看 ChatPyPI 支持哪些命令 | [CLI 树](cli-tree.md) | 已整理，作为命令面主入口 |
 | 创建 ChatArch Python 包模板，并生成 MkDocs / i18n / Actions | [ChatArch 模板与 Docs Flow](template-flow.md) | 已实现，当前 PR 更新模板规范 |
 | 构建、检查、上传 Python 包，或配置 Trusted Publisher | [发布与 Trusted Publisher Flow](pypi-flow.md) | 部分已实现，部分保留人工 checkpoint |
+| 持久切换当前用户 uv / pip 下载源 | [uv / pip 用户下载源](mirrors.md) | 已实现，支持 official/Tsinghua 与 dry-run |
 | 查看命令背后的 Python 接口边界 | [Python 接口树](interface-tree.md) | 已整理 |
 
 ## 核心入口
@@ -66,6 +67,7 @@ chatpypi --help
 chatpypi pkg --help
 chatpypi auth --help
 chatpypi publisher --help
+chatpypi mirror show
 ```
 
 ## 本地预览

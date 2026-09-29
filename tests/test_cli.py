@@ -12,6 +12,7 @@ def test_help_lists_pypi_commands():
     assert "auth" in result.output
     assert "profile" in result.output
     assert "config" in result.output
+    assert "mirror" in result.output
     assert "pkg" in result.output
     assert "project" in result.output
     assert "publisher" in result.output
@@ -45,6 +46,9 @@ def test_tree_options_print_registered_pypi_cli_tree():
     assert "pkg  # Package scaffold/build/check/upload/probe helpers." in full.output
     assert "init [NAME] [--template TEMPLATE]" in full.output
     assert "publisher  # Read or manage current-account publisher views." in full.output
+    assert "mirror  # Manage current-user uv and pip download indexes." in full.output
+    assert "show [--tool TOOL] [--format OUTPUT-FORMAT]" in full.output
+    assert "set [PRESET] [--tool TOOL]" in full.output
     assert brief.output.startswith("chatpypi\n")
     assert "init  # Scaffold a minimal src-layout Python package." in brief.output
     assert "publisher  # Read or manage current-account publisher views." in brief.output
@@ -56,7 +60,7 @@ def test_version_option_reports_package_version():
     result = CliRunner().invoke(cli, ["--version"])
 
     assert result.exit_code == 0
-    assert "chatpypi, version 0.2.12" in result.output
+    assert "chatpypi, version 0.2.13" in result.output
 
 
 def test_publisher_help_lists_direct_active_commands():

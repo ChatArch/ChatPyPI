@@ -11,7 +11,7 @@ import click
 from click.core import ParameterSource
 
 from chatpypi import __version__
-from chatpypi.config import load_pypi_env_profile
+from chatpypi.config import load_pypi_env_profile, resolve_pypi_proxy_url
 from chatpypi.session_ops import (
     LEGACY_SESSION_TOKEN_ENV,
     PyPISessionError,
@@ -222,6 +222,12 @@ def config():
     pass
 
 
+@cli.group(name="mirror")
+def mirror():
+    """Manage current-user uv and pip download indexes."""
+    pass
+
+
 @cli.group(name="project")
 def project():
     """Read current-account project views."""
@@ -335,6 +341,126 @@ def _session_summary(payload: dict, source: str = "env") -> dict[str, object]:
 
 def _echo_json(payload: dict[str, object]) -> None:
     click.echo(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def _echo_mirror_result(payload: dict[str, object]) -> None:
+    click.echo("Scope: USER configuration")
+    tools = payload.get("tools")
+    if isinstance(tools, dict):
+        for name, raw_detail in tools.items():
+            if not isinstance(raw_detail, dict):
+                continue
+            status = raw_detail.get("status")
+            suffix = f" ({status})" if status else ""
+            click.echo(
+                f"{name}: {raw_detail.get('preset', 'unset')} "
+                f"{raw_detail.get('url') or '-'}{suffix}"
+            )
+            click.echo(f"  user file: {raw_detail.get('path')}")
+    warnings = payload.get("warnings")
+    if isinstance(warnings, list):
+        for warning in warnings:
+            click.echo(f"Warning: {warning}", err=True)
+
+
+@mirror.command(name="show")
+@click.option(
+    "--tool",
+    type=click.Choice(["uv", "pip", "all"]),
+    default="all",
+    show_default=True,
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+)
+def mirror_show(tool: str, output_format: str):
+    """Show native current-user download-index settings."""
+    from chatpypi.mirror_ops import MirrorConfigError, show_mirrors
+
+    try:
+        result = show_mirrors(tool=tool)
+    except MirrorConfigError as exc:
+        raise click.ClickException(str(exc)) from None
+    if output_format == "json":
+        _echo_json(result)
+    else:
+        _echo_mirror_result(result)
+
+
+@mirror.command(name="set")
+@click.argument("preset", type=click.Choice(["default", "tsinghua"]), required=False)
+@click.option(
+    "--tool",
+    type=click.Choice(["uv", "pip", "all"]),
+    default="all",
+    show_default=True,
+)
+@click.option("--dry-run", is_flag=True, help="Preview changes without creating files.")
+@click.option(
+    "--interactive/--no-interactive",
+    "interactive",
+    "-i/-I",
+    default=None,
+    help=INTERACTIVE_OPTION_HELP,
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+)
+def mirror_set(
+    preset: str | None,
+    tool: str,
+    dry_run: bool,
+    interactive: bool | None,
+    output_format: str,
+):
+    """Persist default or Tsinghua as a user download index."""
+    from chatpypi.mirror_ops import MirrorConfigError, set_mirrors
+
+    missing_required = preset is None
+    usage = (
+        "Usage: chatpypi mirror set [default|tsinghua] "
+        "[--tool uv|pip|all] [--dry-run] [-i|-I] [--format text|json]"
+    )
+    resolution = resolve_interactive_mode(
+        interactive=interactive,
+        auto_prompt_condition=missing_required,
+    )
+    abort_if_force_without_tty(
+        resolution.force_interactive, resolution.can_prompt, usage
+    )
+    abort_if_missing_without_tty(
+        missing_required=missing_required,
+        interactive=resolution.interactive,
+        can_prompt=resolution.can_prompt,
+        message="Preset is required. Pass default or tsinghua.",
+        usage=usage,
+    )
+    if resolution.need_prompt:
+        preset = ask_select(
+            "选择下载源",
+            choices=[
+                "default - official PyPI",
+                "tsinghua - Tsinghua PyPI mirror",
+            ],
+        ).split(" - ", 1)[0]
+    if preset is None:
+        raise click.ClickException("Preset is required. Pass default or tsinghua.")
+    try:
+        result = set_mirrors(preset, tool=tool, dry_run=dry_run)
+    except MirrorConfigError as exc:
+        raise click.ClickException(str(exc)) from None
+    if output_format == "json":
+        _echo_json(result)
+    else:
+        _echo_mirror_result(result)
 
 
 @cli.command(name="init")
@@ -849,6 +975,13 @@ def auth_login(
         except (RuntimeError, ValueError) as exc:
             raise click.ClickException(str(exc)) from None
     profile_values = _load_env_profile_values(env_profile)
+    proxy_invalid = False
+    try:
+        proxy_url = resolve_pypi_proxy_url(profile_values=profile_values)
+    except (ValueError, TypeError):
+        proxy_invalid, proxy_url = True, None
+    if proxy_invalid:
+        raise click.ClickException("Invalid PYPI_PROXY_URL configuration.")
     username = (
         profile_values.get("PYPI_USERNAME")
         if env_profile and profile_values.get("PYPI_USERNAME")
@@ -873,6 +1006,8 @@ def auth_login(
         "base_url": base_url,
         "timeout": timeout,
     }
+    if proxy_url is not None:
+        login_kwargs["proxy_url"] = proxy_url
     if wait_email:
         login_kwargs.update(
             {
@@ -1456,6 +1591,7 @@ KNOWN_COMMANDS = {
     "auth",
     "profile",
     "config",
+    "mirror",
     "pkg",
     "project",
     "publisher",

@@ -2,15 +2,20 @@
 
 ## Unreleased
 
-### Added
+## 0.2.13
 
-- Add opt-in `chatpypi auth login --wait-email --wait-timeout 600` handling for the PyPI new-device email confirmation checkpoint, with one bounded hidden terminal prompt and explicit required/timeout/cancelled/invalid/auth/network failures.
-- Add a reusable `login_to_pypi(..., confirmation_provider=..., confirmation_timeout=...)` callback API for in-process automation.
+### 新增
 
-### Security
+- 新增 `chatpypi mirror show|set`，在官方 PyPI 与清华源之间持久切换当前用户的 uv/pip 下载索引，提供 JSON、dry-run、交互选择和可复用 Python API。
+- 新增 `auth login --wait-email --wait-timeout`：遇到新设备邮件检查点时有界等待隐藏输入，并提供 Python `confirmation_provider` 回调。
+- 支持选定 ChatEnv PyPI profile 的 `PYPI_PROXY_URL`，为自动登录、会话复用及 Publisher 管理保持独立出口，不改全局代理、下载镜像或上传地址。
 
-- Strictly validate official PyPI confirmation origins and link structure before consuming a token, keep the login Session and frozen proxy selection, constrain redirects to the same origin without token Referer propagation, and verify the actual authenticated account username before any CLI token-store write.
-- Fail unsupported/non-TTY terminal waits before credential lookup or network access, and restore scoped POSIX signal, timer, and terminal state after hidden input timeout or cancellation.
+### 安全与兼容
+
+- 核验邮件确认 URL、同源跳转和实际账号；确认值不进入 Referer 或错误链，成功前不覆盖已保存会话。
+- 镜像修改保留其它配置值，支持 pip 原生 INI 写法；自定义或命名 uv 默认索引的危险迁移在写入前拒绝。
+- 两个工具的配置先验证再原子替换；失败时回滚已完成的写入。状态和错误不回显私有索引或代理凭据。
+- 非 TTY 或不支持的终端等待环境在登录前失败；超时与取消恢复原终端状态。
 
 ## 0.2.12 - 2026-08-21
 

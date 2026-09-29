@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+from urllib.parse import urlsplit
 from typing import Any
 
 from chatenv.fields import BaseEnvConfig as _BaseEnvConfig, EnvField as _EnvField
@@ -41,6 +43,45 @@ def load_pypi_env_profile(
     """Load a named PyPI ChatEnv profile without activating it globally."""
 
     return EnvStore(get_paths(home).envs_dir).load_profile(PyPIConfig, profile_name)
+
+
+def resolve_pypi_proxy_url(
+    *,
+    proxy_url: str | None = None,
+    env_profile: str | None = None,
+    home: str | Path | None = None,
+    profile_values: dict[str, str] | None = None,
+) -> str | None:
+    """Resolve a PyPI-web-only proxy without modifying process-wide routing."""
+    if proxy_url is not None:
+        value = proxy_url
+    elif profile_values is not None:
+        value = profile_values.get("PYPI_PROXY_URL") or os.getenv("PYPI_PROXY_URL")
+    elif env_profile is not None:
+        values = load_pypi_env_profile(env_profile, home=home)
+        value = values.get("PYPI_PROXY_URL") or os.getenv("PYPI_PROXY_URL")
+    else:
+        value = os.getenv("PYPI_PROXY_URL") or load_active_pypi_env(home).get("PYPI_PROXY_URL")
+    if value is None or value == "":
+        return None
+    invalid = not isinstance(value, str)
+    parsed = None
+    if not invalid:
+        invalid = any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value)
+        try:
+            parsed = urlsplit(value)
+            parsed.port
+        except (ValueError, UnicodeError):
+            invalid = True
+    if invalid or parsed is None or (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("PYPI_PROXY_URL must be a valid HTTP(S) proxy URL.")
+    return value
 
 
 def save_active_pypi_env_value(
@@ -102,7 +143,14 @@ setattr(
     "PYPI_TOTP_SECRET",
     EnvField("PYPI_TOTP_SECRET", desc="PyPI TOTP seed/secret", is_sensitive=True),
 )
+setattr(
+    PyPIConfig,
+    "PYPI_PROXY_URL",
+    EnvField("PYPI_PROXY_URL", desc="Proxy for PyPI web login and management only", is_sensitive=True),
+)
+
 __all__ = [
+    "resolve_pypi_proxy_url",
     "PyPIConfig",
     "load_active_pypi_env",
     "load_pypi_env_profile",

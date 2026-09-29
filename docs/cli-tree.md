@@ -16,6 +16,7 @@ chatpypi                  # Python 包生命周期与 PyPI 操作入口
 ├── auth                  # 登录态、账号和人工 checkpoint 流程
 ├── profile               # 规划：本地 ChatPyPI profile 管理
 ├── config                # 规划：本地配置键值管理
+├── mirror                # 当前用户 uv / pip 默认下载源
 ├── project               # 读取当前登录账号的 PyPI project 视图
 ├── publisher             # 读取或配置 Trusted Publisher
 ├── token                 # 规划 / checkpoint：PyPI API token 管理
@@ -29,6 +30,16 @@ chatpypi                  # Python 包生命周期与 PyPI 操作入口
 ```
 
 `chatpypi --tree` 和 `chatpypi --tree-brief` 由 ChatStyle 的 `add_tree_option()` 提供，并通过共享 `render_click_tree()` 回读注册树。默认树保留参数签名；简明树保留命令节点和描述，但省略参数签名。`pkg init -t chatarch` 生成的新包也包含这两个顶层选项。
+
+## uv / pip 下载源
+
+```text
+chatpypi mirror
+├── show [--tool uv|pip|all] [--format text|json]
+└── set [default|tsinghua] [--tool uv|pip|all] [--dry-run] [-i|-I] [--format text|json]
+```
+
+两个命令都只读写工具原生的当前用户配置；`show` 不把 USER 状态误报为最终 effective 状态，自定义 URL 会脱敏。路径、precedence、迁移冲突和 transaction 边界见 [uv / pip 用户下载源](mirrors.md)。
 
 ## 包生命周期
 

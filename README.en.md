@@ -70,6 +70,9 @@ chatpypi
 │   ├── get
 │   ├── set
 │   └── unset
+├── mirror
+│   ├── show
+│   └── set
 ├── pkg
 │   ├── init
 │   ├── build
@@ -100,6 +103,7 @@ chatpypi
 
 Current implementation focus:
 
+- `mirror show|set`: inspect or persist official/Tsinghua defaults in native current-user uv/pip configuration, with dry-run, JSON, override warnings, and safe transactions
 - `pkg`: package init/build/check/upload/probe
 - `auth login`: log in with username/password and optional TOTP; it can explicitly wait once for an email confirmation link and verifies the actual account before refreshing the parallel ChatEnv token profile
 - `auth whoami` / `auth session show|clear`: validate the saved session and show non-sensitive local summaries
@@ -143,6 +147,7 @@ The minimum set currently falls into two categories:
   - `PYPI_USERNAME`: PyPI username for `chatpypi auth login`
   - `PYPI_PASSWORD`: PyPI password, read indirectly through `--password-env`
   - `PYPI_TOTP_SECRET`: optional TOTP secret for 2FA checkpoints
+  - `PYPI_PROXY_URL`: optional HTTP(S) proxy for PyPI web login/management only. A selected profile takes precedence and overrides `NO_PROXY` for those requests, without changing global proxies or download indexes.
   - Web session state: generated/refreshed by `chatpypi auth login` into `tokens/PyPI/<profile>.json`, parallel to `envs/PyPI/<profile>.env`
 - Manual uploads:
   - `PYPI_API_TOKEN`: PyPI API token used with `chatpypi pkg upload --token-env PYPI_API_TOKEN`
@@ -173,6 +178,8 @@ read -rsp "PyPI TOTP secret: " PYPI_TOTP_SECRET; echo; export PYPI_TOTP_SECRET
 read -rsp "PyPI API token: " PYPI_API_TOKEN; echo; export PYPI_API_TOKEN
 
 chatpypi auth login --password-env PYPI_PASSWORD --totp-env PYPI_TOTP_SECRET
+chatpypi mirror set tsinghua --dry-run
+chatpypi mirror show --format json
 chatpypi auth login -e PROFILE --wait-email --wait-timeout 600
 chatpypi auth whoami --format json
 chatpypi project list --format json

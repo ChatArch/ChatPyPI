@@ -70,6 +70,9 @@ chatpypi
 │   ├── get
 │   ├── set
 │   └── unset
+├── mirror
+│   ├── show
+│   └── set
 ├── pkg
 │   ├── init
 │   ├── build
@@ -100,6 +103,7 @@ chatpypi
 
 当前实现重点：
 
+- `mirror show|set`：查看或持久切换当前用户 uv / pip 原生默认下载源（official/Tsinghua），支持 dry-run、JSON、环境覆盖提示和安全 transaction
 - `pkg`：包初始化、构建、检查、上传、探测
 - `auth login`：使用用户名、密码和可选 TOTP 获取真实 PyPI 登录 session；可显式等待一次邮件确认链接，最终核验实际账号后再写入 ChatEnv token profile
 - `auth whoami` / `auth session show|clear`：真实 session 验证与本地 session 摘要读取
@@ -142,6 +146,7 @@ chatenv new -t pypi default
   - `PYPI_USERNAME`：PyPI 用户名，用于 `chatpypi auth login`
   - `PYPI_PASSWORD`：PyPI 密码，只通过 `--password-env` 或 matching ChatEnv refresh provider 读取，不直接作为命令行值传入
   - `PYPI_TOTP_SECRET`：可选 TOTP secret，用于自动完成 2FA checkpoint
+  - `PYPI_PROXY_URL`：可选的 PyPI 网页登录/管理专用 HTTP(S) 代理，优先采用所选 profile 配置并覆盖该请求的 `NO_PROXY`；不修改全局代理或下载镜像。
   - Web 登录态 session：`chatpypi auth login` 或 `chatenv token refresh PyPI <profile>` 生成/刷新到 `tokens/PyPI/<profile>.json`，与 `envs/PyPI/<profile>.env` 一一对应
 - 手动发布：
   - `PYPI_API_TOKEN`：PyPI API token，配合 `chatpypi pkg upload --token-env PYPI_API_TOKEN`
@@ -169,6 +174,8 @@ read -rsp "PyPI TOTP secret: " PYPI_TOTP_SECRET; echo; export PYPI_TOTP_SECRET  
 read -rsp "PyPI API token: " PYPI_API_TOKEN; echo; export PYPI_API_TOKEN
 
 chatpypi auth login --password-env PYPI_PASSWORD --totp-env PYPI_TOTP_SECRET
+chatpypi mirror set tsinghua --dry-run
+chatpypi mirror show --format json
 chatpypi auth login -e PROFILE --wait-email --wait-timeout 600
 chatpypi auth whoami --format json
 chatpypi project list --format json

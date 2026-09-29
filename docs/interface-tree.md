@@ -1,6 +1,17 @@
 # Python 接口树
 
-ChatPyPI 的 CLI 应保持薄入口；实质行为放在 `chatpypi.main` 和 `chatpypi.session_ops`。
+ChatPyPI 的 CLI 应保持薄入口；实质行为放在 `chatpypi.main`、`chatpypi.session_ops` 和 `chatpypi.mirror_ops`。
+
+## `chatpypi.mirror_ops`
+
+```text
+resolve_user_config_paths
+show_mirrors
+set_mirrors
+MirrorConfigError
+```
+
+这些 API 管理 uv / pip 原生当前用户配置；支持 `home`、`platform`、`env` 和显式路径注入。返回值只暴露 public preset URL，自定义 URL 固定脱敏。
 
 ## `chatpypi.main`
 
@@ -45,6 +56,10 @@ remove_pending_github_publisher_from_payload
 `login_to_pypi` 的邮件确认扩展签名为 `confirmation_provider(checkpoint, remaining_seconds)` 与 `confirmation_timeout=600`。provider 返回完整 HTTPS 确认链接；checkpoint 只包含 origin/path，不包含 token。API 复用同一 requests Session、冻结本次尝试的代理选择、手动限制同 origin 跳转，并在返回常规 `(payload, encoded_token)` 前从真实 account 响应证明用户名一致。
 
 deadline 对任意第三方 callback 是协作式契约：调用前后会检查超时，但 Python API 不会用线程或进程假装可中断任意 callback。CLI 的 `chatpypi.prompt_ops.ask_email_confirmation_url` 是窄范围 POSIX 主线程适配器，使用 ChatStyle 隐藏输入和 scoped timer，并恢复 signal/timer/终端状态。
+
+## `chatpypi.config`
+
+`resolve_pypi_proxy_url()` 从所选 profile / 环境中读取可选 `PYPI_PROXY_URL`；配置通过 ChatEnv 管理。`login_to_pypi(..., proxy_url=...)` 可显式指定代理。加载 token profile 后，网页管理请求在内存中绑定同一 profile 的传输设置，JSON 序列化不包含此绑定。
 
 ## `chatpypi.cli`
 

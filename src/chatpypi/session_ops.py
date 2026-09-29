@@ -37,6 +37,28 @@ class PyPISessionError(RuntimeError):
     category = "session"
 
 
+class _BoundSessionPayload(dict):
+    """Transient transport binding; JSON contains only the original session."""
+    __slots__ = ("_proxy_url",)
+
+    def __init__(self, payload: dict[str, Any], proxy_url: str | None):
+        super().__init__(payload)
+        self._proxy_url = proxy_url
+
+
+def _proxy_setting(**kwargs) -> str | None:
+    from chatpypi.config import resolve_pypi_proxy_url
+
+    invalid = False
+    try:
+        value = resolve_pypi_proxy_url(**kwargs)
+    except (ValueError, TypeError):
+        invalid, value = True, None
+    if invalid:
+        raise PyPISessionError("Invalid PYPI_PROXY_URL configuration.")
+    return value
+
+
 class EmailConfirmationRequiredError(PyPISessionError):
     """Raised when PyPI requires an email confirmation link."""
 
@@ -580,6 +602,8 @@ def refresh_chatenv_token(
     username = _required_profile_value(profile_values, "PYPI_USERNAME", profile=profile_name)
     password = _required_profile_value(profile_values, "PYPI_PASSWORD", profile=profile_name)
     totp_secret = profile_values.get("PYPI_TOTP_SECRET") or None
+    proxy_url = _proxy_setting(profile_values=profile_values)
+    transport = {"proxy_url": proxy_url} if proxy_url is not None else {}
     try:
         payload, _session_token = login_to_pypi(
             username=username,
@@ -587,6 +611,7 @@ def refresh_chatenv_token(
             totp_secret=totp_secret,
             base_url=DEFAULT_BASE_URL,
             timeout=20.0,
+            **transport,
         )
     except PyPISessionError as exc:
         raise ValueError(str(exc)) from exc
@@ -663,7 +688,7 @@ def load_session_payload_from_token_store(
         raise PyPISessionError("PyPI token store payload is not a valid session object.")
     if not isinstance(session_payload.get("cookies"), list):
         raise PyPISessionError("PyPI token store payload missing cookie list.")
-    return session_payload
+    return _BoundSessionPayload(session_payload, _proxy_setting(env_profile=env_profile, home=home))
 
 
 def load_session_payload_from_env(
@@ -680,7 +705,9 @@ def load_session_payload_from_env(
     """
 
     if token:
-        return decode_session_token(token)
+        return _BoundSessionPayload(
+            decode_session_token(token), _proxy_setting(env_profile=env_profile, home=home)
+        )
     return load_session_payload_from_token_store(env_profile=env_profile, home=home)
 
 
@@ -700,7 +727,14 @@ def load_session_payload(session_file: Path | str) -> dict[str, Any]:
 
 
 def requests_session_from_payload(payload: dict[str, Any]) -> requests.Session:
+    proxy_url = (
+        payload._proxy_url if isinstance(payload, _BoundSessionPayload)
+        else _proxy_setting(profile_values={})
+    )
     session = requests.Session()
+    if proxy_url is not None:
+        session.proxies.update({"http": proxy_url, "https": proxy_url})
+        session.trust_env = False
     cookies = payload.get("cookies")
     if not isinstance(cookies, list):
         raise PyPISessionError("Session payload missing cookie list.")
@@ -902,10 +936,12 @@ def _authenticated_account_username(response: requests.Response) -> str:
     return next(iter(parser.usernames))
 
 
-def _freeze_session_proxies(session: requests.Session, url: str) -> None:
-    """Resolve environment proxies once so an attempt cannot switch egress config."""
-
-    session.proxies.update(requests.utils.get_environ_proxies(url))
+def _freeze_session_proxies(
+    session: requests.Session, url: str, *, proxy_url: str | None = None
+) -> None:
+    """Resolve one route; a dedicated PyPI proxy also overrides NO_PROXY."""
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url is not None else requests.utils.get_environ_proxies(url)
+    session.proxies.update(proxies)
     session.trust_env = False
 
 
@@ -962,6 +998,7 @@ def login_to_pypi(
     timeout: float = 20.0,
     confirmation_provider: ConfirmationProvider | None = None,
     confirmation_timeout: float = 600.0,
+    proxy_url: str | None = None,
 ) -> tuple[dict[str, Any], str]:
     if (
         not isinstance(timeout, (int, float))
@@ -976,10 +1013,11 @@ def login_to_pypi(
         expected_origin = validate_email_confirmation_base_url(base_url)
     else:
         expected_origin = _origin_from_url(base_url)
+    proxy_url = _proxy_setting(proxy_url=proxy_url, profile_values={})
     base_url = base_url.rstrip("/")
     session = requests.Session()
     login_url = urljoin(base_url, "/account/login/")
-    _freeze_session_proxies(session, login_url)
+    _freeze_session_proxies(session, login_url, proxy_url=proxy_url)
     session.headers.update(
         {
             "User-Agent": "ChatPyPI/0.2 (+https://github.com/ChatArch/ChatPyPI)",
