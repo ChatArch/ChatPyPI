@@ -16,6 +16,7 @@ chatpypi                  # Python 包生命周期与 PyPI 操作入口
 ├── auth                  # 登录态、账号和人工 checkpoint 流程
 ├── profile               # 规划：本地 ChatPyPI profile 管理
 ├── config                # 规划：本地配置键值管理
+├── mirror                # 当前用户 uv / pip 默认下载源
 ├── project               # 读取当前登录账号的 PyPI project 视图
 ├── publisher             # 读取或配置 Trusted Publisher
 ├── token                 # 规划 / checkpoint：PyPI API token 管理
@@ -29,6 +30,16 @@ chatpypi                  # Python 包生命周期与 PyPI 操作入口
 ```
 
 `chatpypi --tree` 和 `chatpypi --tree-brief` 由 ChatStyle 的 `add_tree_option()` 提供，并通过共享 `render_click_tree()` 回读注册树。默认树保留参数签名；简明树保留命令节点和描述，但省略参数签名。`pkg init -t chatarch` 生成的新包也包含这两个顶层选项。
+
+## uv / pip 下载源
+
+```text
+chatpypi mirror
+├── show [--tool uv|pip|all] [--format text|json]
+└── set [default|tsinghua] [--tool uv|pip|all] [--dry-run] [-i|-I] [--format text|json]
+```
+
+两个命令都只读写工具原生的当前用户配置；`show` 不把 USER 状态误报为最终 effective 状态，自定义 URL 会脱敏。路径、precedence、迁移冲突和 transaction 边界见 [uv / pip 用户下载源](mirrors.md)。
 
 ## 包生命周期
 
@@ -53,7 +64,7 @@ chatpypi probe            # 兼容 `chatpypi pkg probe`
 
 ```text
 chatpypi auth             # 登录态、账号和引导型操作
-├── login                 # 用户名/密码/TOTP 登录，并写入 ChatEnv token profile
+├── login                 # 用户名/密码/TOTP 登录；可有界等待一次邮件确认链接
 ├── logout                # 清理本地 session token-store state
 ├── whoami                # 用 session 读回当前账号摘要
 ├── register              # 规划 / checkpoint：账号注册
@@ -67,7 +78,7 @@ chatpypi auth             # 登录态、账号和引导型操作
     └── clear             # 清理 session token-store state
 ```
 
-认证命令必须遵守安全边界：密码、TOTP secret、session runtime state、cookie 只通过 env/profile/private store 读取或写入，CLI 和文档都不能回显真实值。`auth login`、`auth whoami` 和 `auth session show|clear` 是当前已实现主路径；注册、邮箱验证、2FA 初始化和恢复码仍然是人工 checkpoint。
+认证命令必须遵守安全边界：密码、TOTP secret、session runtime state、cookie 和邮件确认链接只通过内存/env/profile/private store 处理，CLI 和文档都不能回显真实值。`auth login --wait-email --wait-timeout 600` 可在新设备检查点等待一次隐藏链接；非 TTY 会在凭据/网络前失败，`--format json` 的提示仍走 stderr。只有确认成功且 account 页实际用户名匹配后才写 token profile。注册、邮箱地址验证、2FA 初始化和恢复码仍然是人工 checkpoint。
 
 ## Project 和 Trusted Publisher
 

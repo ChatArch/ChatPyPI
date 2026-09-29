@@ -9,6 +9,7 @@ ChatPyPI is ChatArch's Python package lifecycle and PyPI automation CLI. It cove
 | See the supported ChatPyPI command surface at a glance | [CLI Tree](cli-tree.md) | Documented as the primary command entry |
 | Create a ChatArch Python package template with MkDocs, i18n, and Actions | [ChatArch Template and Docs Flow](template-flow.md) | Implemented; this PR updates the template contract |
 | Build, check, upload Python packages, or configure Trusted Publishers | [Publishing and Trusted Publisher Flow](pypi-flow.md) | Partially implemented; some flows remain human-checkpointed |
+| Persist current-user uv / pip download indexes | [uv / pip User Download Indexes](mirrors.md) | Implemented with official/Tsinghua presets and dry-run |
 | Review Python interfaces behind commands | [Python Interface Tree](interface-tree.md) | Documented |
 
 ## Primary Entry Points
@@ -64,4 +65,5 @@ chatpypi --help
 chatpypi pkg --help
 chatpypi auth --help
 chatpypi publisher --help
+chatpypi mirror show
 ```

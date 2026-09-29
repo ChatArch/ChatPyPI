@@ -38,6 +38,7 @@ plugins:
             模板创建: Template Creation
             ChatArch 模板与 Docs Flow: ChatArch Template and Docs Flow
             PyPI 发布: PyPI Publishing
+            uv / pip 用户下载源: uv / pip User Download Indexes
             发布与 Trusted Publisher Flow: Publishing and Trusted Publisher Flow
             命令与接口: Commands and APIs
             CLI 树: CLI Tree
@@ -69,6 +70,7 @@ nav:
       - ChatArch 模板与 Docs Flow: template-flow.md
   - PyPI 发布:
       - 发布与 Trusted Publisher Flow: pypi-flow.md
+      - uv / pip 用户下载源: mirrors.md
   - 命令与接口:
       - CLI 树: cli-tree.md
       - Python 接口树: interface-tree.md

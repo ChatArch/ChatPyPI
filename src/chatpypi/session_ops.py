@@ -9,13 +9,14 @@ import hashlib
 import hmac
 from html.parser import HTMLParser
 import json
+import math
 import os
 from pathlib import Path
 from struct import pack, unpack
 import tempfile
 import time
-from typing import Any
-from urllib.parse import urljoin
+from typing import Any, Callable
+from urllib.parse import parse_qsl, urljoin, urlsplit
 
 import requests
 from chatenv import TokenRefreshResult, TokenStore
@@ -32,6 +33,117 @@ LEGACY_SESSION_TOKEN_ENV = "PYPI_SESSION_TOKEN"
 
 class PyPISessionError(RuntimeError):
     """Raised when a PyPI session/login/read operation fails cleanly."""
+
+    category = "session"
+
+
+class _BoundSessionPayload(dict):
+    """Transient transport binding; JSON contains only the original session."""
+    __slots__ = ("_proxy_url",)
+
+    def __init__(self, payload: dict[str, Any], proxy_url: str | None):
+        super().__init__(payload)
+        self._proxy_url = proxy_url
+
+
+def _proxy_setting(**kwargs) -> str | None:
+    from chatpypi.config import resolve_pypi_proxy_url
+
+    invalid = False
+    try:
+        value = resolve_pypi_proxy_url(**kwargs)
+    except (ValueError, TypeError):
+        invalid, value = True, None
+    if invalid:
+        raise PyPISessionError("Invalid PYPI_PROXY_URL configuration.")
+    return value
+
+
+def _selected_profile_proxy(
+    env_profile: str | None,
+    home: str | Path | None,
+    payload: dict[str, Any],
+) -> str | None:
+    """Bind a stored session only to its selected profile's safe transport."""
+    if env_profile is None:
+        return _proxy_setting(allow_process_fallback=True)
+    from chatpypi.config import load_pypi_env_profile
+
+    values = load_pypi_env_profile(env_profile, home=home)
+    proxy_url = _proxy_setting(profile_values=values, allow_process_fallback=False)
+    configured_username = str(values.get("PYPI_USERNAME") or "").strip()
+    stored_username = str(payload.get("username") or "").strip()
+    if proxy_url is not None and not configured_username:
+        raise PyPISessionError("PyPI proxy profile is missing PYPI_USERNAME.")
+    if configured_username and (
+        not stored_username
+        or not stored_username.isascii()
+        or configured_username.lower() != stored_username.lower()
+    ):
+        raise PyPISessionError("Stored PyPI session does not match selected profile.")
+    return proxy_url
+
+
+class EmailConfirmationRequiredError(PyPISessionError):
+    """Raised when PyPI requires an email confirmation link."""
+
+    category = "confirmation_required"
+
+    def __init__(self, message: str = "PyPI login requires email confirmation; retry with --wait-email.") -> None:
+        super().__init__(message)
+
+
+class EmailConfirmationTimeoutError(PyPISessionError):
+    """Raised when the bounded email confirmation wait expires."""
+
+    category = "confirmation_timeout"
+
+    def __init__(self, message: str = "Timed out waiting for the PyPI email confirmation link.") -> None:
+        super().__init__(message)
+
+
+class EmailConfirmationCancelledError(PyPISessionError):
+    """Raised when email confirmation input is cancelled safely."""
+
+    category = "confirmation_cancelled"
+
+    def __init__(self, message: str = "PyPI email confirmation was cancelled.") -> None:
+        super().__init__(message)
+
+
+class InvalidEmailConfirmationError(PyPISessionError):
+    """Raised when a confirmation link or its result is invalid."""
+
+    category = "invalid_confirmation"
+
+    def __init__(self, message: str = "PyPI email confirmation link is invalid.") -> None:
+        super().__init__(message)
+
+
+class PyPIAuthenticationError(PyPISessionError):
+    """Raised when PyPI authentication or identity proof fails."""
+
+    category = "authentication"
+
+
+class PyPINetworkError(PyPISessionError):
+    """Raised with a fixed message for requests-layer failures."""
+
+    category = "network"
+
+    def __init__(self, message: str = "PyPI network request failed.") -> None:
+        super().__init__(message)
+
+
+@dataclass(frozen=True)
+class EmailConfirmationCheckpoint:
+    """Non-secret context passed to a confirmation provider callback."""
+
+    origin: str
+    path: str = "/account/confirm-login/"
+
+
+ConfirmationProvider = Callable[[EmailConfirmationCheckpoint, float], str]
 
 
 @dataclass(frozen=True)
@@ -130,6 +242,70 @@ class TextLinkParser(HTMLParser):
     @property
     def text(self) -> str:
         return "\n".join(self.text_parts)
+
+
+class AccountIdentityParser(HTMLParser):
+    """Read the official account-details Username field, never profile links."""
+
+    _VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input",
+                  "link", "meta", "param", "source", "track", "wbr"}
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.usernames: list[str] = []
+        self.sections_seen = 0
+        self._stack: list[str] = []
+        self._scope_depth: int | None = None
+        self._label_depth: int | None = None
+        self._value_depth: int | None = None
+        self._label: list[str] = []
+        self._value: list[str] = []
+        self._await_username = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self._VOID_TAGS:
+            return
+        self._stack.append(tag)
+        depth = len(self._stack)
+        values = dict(attrs)
+        if tag == "section" and values.get("id") == "account-details":
+            self.sections_seen += 1
+            if self._scope_depth is None:
+                self._scope_depth = depth
+        if self._scope_depth is None:
+            return
+        classes = (values.get("class") or "").split()
+        if tag == "span" and "form-group__label" in classes:
+            self._label_depth = depth
+            self._label = []
+            self._await_username = False
+        elif tag == "p" and "form-group__text" in classes and self._await_username:
+            self._value_depth = depth
+            self._value = []
+            self._await_username = False
+
+    def handle_data(self, data: str) -> None:
+        if self._label_depth is not None:
+            self._label.append(data)
+        if self._value_depth is not None:
+            self._value.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self._stack or tag not in self._stack:
+            return
+        depth = len(self._stack) - self._stack[::-1].index(tag)
+        if self._label_depth == depth:
+            self._await_username = "".join(self._label).strip() == "Username"
+            self._label_depth = None
+        if self._value_depth == depth:
+            self.usernames.append("".join(self._value).strip())
+            self._value_depth = None
+        if self._scope_depth is not None and depth <= self._scope_depth:
+            self._scope_depth = None
+            self._label_depth = None
+            self._value_depth = None
+            self._await_username = False
+        del self._stack[depth - 1:]
 
 
 class SectionTableParser(HTMLParser):
@@ -451,6 +627,8 @@ def refresh_chatenv_token(
     username = _required_profile_value(profile_values, "PYPI_USERNAME", profile=profile_name)
     password = _required_profile_value(profile_values, "PYPI_PASSWORD", profile=profile_name)
     totp_secret = profile_values.get("PYPI_TOTP_SECRET") or None
+    proxy_url = _proxy_setting(profile_values=profile_values, allow_process_fallback=False)
+    transport = {"proxy_url": proxy_url} if proxy_url is not None else {}
     try:
         payload, _session_token = login_to_pypi(
             username=username,
@@ -458,6 +636,7 @@ def refresh_chatenv_token(
             totp_secret=totp_secret,
             base_url=DEFAULT_BASE_URL,
             timeout=20.0,
+            **transport,
         )
     except PyPISessionError as exc:
         raise ValueError(str(exc)) from exc
@@ -534,7 +713,7 @@ def load_session_payload_from_token_store(
         raise PyPISessionError("PyPI token store payload is not a valid session object.")
     if not isinstance(session_payload.get("cookies"), list):
         raise PyPISessionError("PyPI token store payload missing cookie list.")
-    return session_payload
+    return _BoundSessionPayload(session_payload, _selected_profile_proxy(env_profile, home, session_payload))
 
 
 def load_session_payload_from_env(
@@ -551,7 +730,10 @@ def load_session_payload_from_env(
     """
 
     if token:
-        return decode_session_token(token)
+        decoded = decode_session_token(token)
+        return _BoundSessionPayload(
+            decoded, _selected_profile_proxy(env_profile, home, decoded)
+        )
     return load_session_payload_from_token_store(env_profile=env_profile, home=home)
 
 
@@ -571,7 +753,14 @@ def load_session_payload(session_file: Path | str) -> dict[str, Any]:
 
 
 def requests_session_from_payload(payload: dict[str, Any]) -> requests.Session:
+    proxy_url = (
+        payload._proxy_url if isinstance(payload, _BoundSessionPayload)
+        else _proxy_setting(allow_process_fallback=True)
+    )
     session = requests.Session()
+    if proxy_url is not None:
+        session.proxies.update({"http": proxy_url, "https": proxy_url})
+        session.trust_env = False
     cookies = payload.get("cookies")
     if not isinstance(cookies, list):
         raise PyPISessionError("Session payload missing cookie list.")
@@ -585,6 +774,219 @@ def requests_session_from_payload(payload: dict[str, Any]) -> requests.Session:
             path=item.get("path") or "/",
         )
     return session
+
+
+def _safe_session_request(
+    session: requests.Session,
+    method: str,
+    url: str,
+    **kwargs: Any,
+) -> requests.Response:
+    """Run session-backed management requests without exposing proxy failures."""
+    failed = False
+    try:
+        response = session.get(url, **kwargs) if method == "GET" else session.post(url, **kwargs)
+    except requests.RequestException:
+        failed, response = True, None
+    if failed:
+        raise PyPINetworkError()
+    assert response is not None
+    return response
+
+
+def _origin_from_url(url: str) -> str:
+    try:
+        parsed = urlsplit(url)
+        parsed.port
+    except ValueError:
+        raise ValueError("PyPI base URL is not valid.") from None
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("PyPI base URL must use an HTTP(S) origin.")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("PyPI base URL must not contain user information.")
+    return f"{parsed.scheme}://{parsed.netloc.lower()}"
+
+
+def validate_email_confirmation_base_url(base_url: str) -> str:
+    """Return a trusted PyPI origin for an email-wait attempt.
+
+    The wait flow intentionally supports only the two official PyPI origins.
+    Plain login retains its existing configurable-base compatibility.
+    """
+
+    if not isinstance(base_url, str) or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in base_url):
+        raise ValueError("Email confirmation requires an exact trusted PyPI base URL.")
+    try:
+        parsed = urlsplit(base_url)
+        port = parsed.port
+    except ValueError:
+        raise ValueError("Email confirmation requires an exact trusted PyPI base URL.") from None
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname not in {"pypi.org", "test.pypi.org"}
+        or parsed.netloc != parsed.hostname
+        or port is not None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("Email confirmation requires https://pypi.org or https://test.pypi.org.")
+    return f"https://{parsed.hostname}"
+
+
+def _validate_confirmation_url(value: object, expected_origin: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise InvalidEmailConfirmationError()
+    if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+        raise InvalidEmailConfirmationError()
+    parse_failed = False
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+        pairs = parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+    except (ValueError, UnicodeError):
+        parse_failed = True
+        parsed = None
+        port = None
+        pairs = []
+    if parse_failed:
+        raise InvalidEmailConfirmationError() from None
+    assert parsed is not None
+    expected = urlsplit(expected_origin)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != expected.hostname
+        or parsed.netloc != expected.hostname
+        or port is not None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path != "/account/confirm-login/"
+        or parsed.fragment
+        or not parsed.query.startswith("token=")
+        or "&" in parsed.query
+        or ";" in parsed.query
+        or len(pairs) != 1
+        or pairs[0][0] != "token"
+        or not pairs[0][1]
+        or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in pairs[0][1])
+    ):
+        raise InvalidEmailConfirmationError()
+    return value
+
+
+def _same_origin_url(url: str, expected_origin: str) -> bool:
+    try:
+        parsed = urlsplit(url)
+        expected = urlsplit(expected_origin)
+        return (
+            parsed.scheme == expected.scheme
+            and parsed.hostname == expected.hostname
+            and parsed.port == expected.port
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.netloc.lower() == expected.netloc.lower()
+            and not parsed.fragment
+        )
+    except ValueError:
+        return False
+
+
+def _request_with_same_origin_redirects(
+    session: requests.Session,
+    method: str,
+    url: str,
+    *,
+    expected_origin: str,
+    timeout: float,
+    data: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
+    confirmation_request: bool = False,
+    max_redirects: int = 5,
+) -> requests.Response:
+    current_method = method.upper()
+    current_url = url
+    current_data = data
+    safe_headers = dict(headers or {})
+    for hop in range(max_redirects + 1):
+        if not _same_origin_url(current_url, expected_origin):
+            if confirmation_request:
+                raise InvalidEmailConfirmationError("PyPI email confirmation redirect was rejected.")
+            raise PyPIAuthenticationError("PyPI login attempted an untrusted redirect.")
+        failed = False
+        try:
+            if current_method == "GET":
+                response = session.get(
+                    current_url,
+                    headers=safe_headers,
+                    timeout=timeout,
+                    allow_redirects=False,
+                )
+            else:
+                response = session.post(
+                    current_url,
+                    data=current_data,
+                    headers=safe_headers,
+                    timeout=timeout,
+                    allow_redirects=False,
+                )
+        except requests.RequestException:
+            failed = True
+            response = None
+        if failed:
+            raise PyPINetworkError() from None
+        assert response is not None
+        if not _same_origin_url(response.url, expected_origin):
+            if confirmation_request:
+                raise InvalidEmailConfirmationError("PyPI email confirmation response was rejected.")
+            raise PyPIAuthenticationError("PyPI login returned an untrusted response.")
+        if response.status_code not in {301, 302, 303, 307, 308}:
+            return response
+        location = response.headers.get("Location")
+        if not location:
+            if confirmation_request:
+                raise InvalidEmailConfirmationError("PyPI email confirmation redirect was invalid.")
+            raise PyPIAuthenticationError("PyPI login returned an invalid redirect.")
+        next_url = urljoin(current_url, location)
+        if not _same_origin_url(next_url, expected_origin):
+            if confirmation_request:
+                raise InvalidEmailConfirmationError("PyPI email confirmation redirect was rejected.")
+            raise PyPIAuthenticationError("PyPI login attempted an untrusted redirect.")
+        current_url = next_url
+        safe_headers = {}
+        if response.status_code in {301, 302, 303} and current_method != "HEAD":
+            current_method = "GET"
+            current_data = None
+        if hop == max_redirects:
+            if confirmation_request:
+                raise InvalidEmailConfirmationError("PyPI email confirmation used too many redirects.")
+            raise PyPIAuthenticationError("PyPI login used too many redirects.")
+    raise AssertionError("unreachable")
+
+
+def _is_email_confirmation_checkpoint(response: requests.Response) -> bool:
+    try:
+        return urlsplit(response.url).path == "/account/confirm-login/"
+    except ValueError:
+        return False
+
+
+def _authenticated_account_username(response: requests.Response) -> str:
+    parser = AccountIdentityParser()
+    parser.feed(response.text)
+    if parser.sections_seen != 1 or len(parser.usernames) != 1 or not parser.usernames[0]:
+        raise PyPIAuthenticationError("Could not prove the authenticated PyPI account identity.")
+    return next(iter(parser.usernames))
+
+
+def _freeze_session_proxies(
+    session: requests.Session, url: str, *, proxy_url: str | None = None
+) -> None:
+    """Resolve one route; a dedicated PyPI proxy also overrides NO_PROXY."""
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url is not None else requests.utils.get_environ_proxies(url)
+    session.proxies.update(proxies)
+    session.trust_env = False
 
 
 def _assert_logged_in_response(response: requests.Response) -> None:
@@ -615,7 +1017,7 @@ def validate_session_payload(
 ) -> dict[str, Any]:
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
-    response = session.get(urljoin(base_url, "/manage/account/"), timeout=timeout)
+    response = _safe_session_request(session, "GET", urljoin(base_url, "/manage/account/"), timeout=timeout)
     _assert_logged_in_response(response)
     text = TextLinkParser()
     text.feed(response.text)
@@ -638,28 +1040,113 @@ def login_to_pypi(
     session_file: Path | str | None = None,
     base_url: str = DEFAULT_BASE_URL,
     timeout: float = 20.0,
+    confirmation_provider: ConfirmationProvider | None = None,
+    confirmation_timeout: float = 600.0,
+    proxy_url: str | None = None,
 ) -> tuple[dict[str, Any], str]:
+    if (
+        not isinstance(timeout, (int, float))
+        or isinstance(timeout, bool)
+        or not math.isfinite(timeout)
+        or timeout <= 0
+    ):
+        raise ValueError("timeout must be a positive finite number of seconds.")
+    if confirmation_provider is not None:
+        if not math.isfinite(confirmation_timeout) or confirmation_timeout <= 0:
+            raise ValueError("confirmation_timeout must be a positive finite number of seconds.")
+        expected_origin = validate_email_confirmation_base_url(base_url)
+    else:
+        expected_origin = _origin_from_url(base_url)
+    proxy_url = _proxy_setting(proxy_url=proxy_url, profile_values={})
     base_url = base_url.rstrip("/")
     session = requests.Session()
+    login_url = urljoin(base_url, "/account/login/")
+    _freeze_session_proxies(session, login_url, proxy_url=proxy_url)
     session.headers.update(
         {
             "User-Agent": "ChatPyPI/0.2 (+https://github.com/ChatArch/ChatPyPI)",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en",
         }
     )
-    login_url = urljoin(base_url, "/account/login/")
-    login_page = session.get(login_url, timeout=timeout)
+    login_page = _request_with_same_origin_redirects(
+        session,
+        "GET",
+        login_url,
+        expected_origin=expected_origin,
+        timeout=timeout,
+    )
     login_form = _find_login_form(parse_forms(login_page.text))
     data = login_form.hidden_values()
     csrf_token = data.get("csrf_token")
     data.update({"username": username, "password": password})
-    response = session.post(
+    response = _request_with_same_origin_redirects(
+        session,
+        "POST",
         _form_action_url(base_url, login_form, "/account/login/"),
+        expected_origin=expected_origin,
         data=data,
         headers={"Referer": login_url, "Origin": base_url},
         timeout=timeout,
-        allow_redirects=True,
     )
+
+    confirmation_used = False
+
+    def complete_confirmation(checkpoint_response: requests.Response) -> requests.Response:
+        nonlocal confirmation_used
+        if confirmation_used:
+            raise InvalidEmailConfirmationError("PyPI returned another email confirmation checkpoint.")
+        if confirmation_provider is None:
+            raise EmailConfirmationRequiredError()
+        confirmation_used = True
+        deadline = time.monotonic() + confirmation_timeout
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise EmailConfirmationTimeoutError()
+        callback_failed = False
+        callback_timed_out = False
+        callback_cancelled = False
+        try:
+            confirmation_url = confirmation_provider(
+                EmailConfirmationCheckpoint(
+                    origin=expected_origin,
+                    path=urlsplit(checkpoint_response.url).path,
+                ),
+                remaining,
+            )
+        except (EmailConfirmationTimeoutError, TimeoutError):
+            callback_timed_out = True
+            confirmation_url = None
+        except (EmailConfirmationCancelledError, KeyboardInterrupt, EOFError):
+            callback_cancelled = True
+            confirmation_url = None
+        except Exception:  # noqa: BLE001 - provider errors must not retain secret-bearing chains.
+            callback_failed = True
+            confirmation_url = None
+        if callback_timed_out:
+            raise EmailConfirmationTimeoutError() from None
+        if callback_cancelled:
+            raise EmailConfirmationCancelledError() from None
+        if callback_failed:
+            raise EmailConfirmationCancelledError("PyPI email confirmation provider failed safely.") from None
+        if time.monotonic() >= deadline:
+            raise EmailConfirmationTimeoutError()
+        validated_url = _validate_confirmation_url(confirmation_url, expected_origin)
+        result = _request_with_same_origin_redirects(
+            session,
+            "GET",
+            validated_url,
+            expected_origin=expected_origin,
+            timeout=timeout,
+            headers={},
+            confirmation_request=True,
+        )
+        if _is_email_confirmation_checkpoint(result):
+            raise InvalidEmailConfirmationError("PyPI email confirmation link is expired or invalid.")
+        return result
+
+    if _is_email_confirmation_checkpoint(response):
+        response = complete_confirmation(response)
     forms = parse_forms(response.text)
     totp_form = _find_totp_form(forms)
     if totp_form is not None:
@@ -670,20 +1157,44 @@ def login_to_pypi(
         form, field_name = totp_form
         totp_data = form.hidden_values()
         totp_data[field_name] = totp_now(totp_secret)
-        response = session.post(
+        response = _request_with_same_origin_redirects(
+            session,
+            "POST",
             _form_action_url(base_url, form, response.url),
+            expected_origin=expected_origin,
             data=totp_data,
-            headers={"Referer": response.url, "Origin": base_url},
+            headers={
+                "Referer": urlsplit(response.url)._replace(query="", fragment="").geturl(),
+                "Origin": expected_origin,
+            },
             timeout=timeout,
-            allow_redirects=True,
         )
+        if _is_email_confirmation_checkpoint(response):
+            response = complete_confirmation(response)
     if "invalid" in response.text.lower() and "password" in response.text.lower():
-        raise PyPISessionError("PyPI rejected the supplied username/password.")
-    account = session.get(urljoin(base_url, "/manage/account/"), timeout=timeout)
-    _assert_logged_in_response(account)
+        raise PyPIAuthenticationError("PyPI rejected the supplied username/password.")
+    account = _request_with_same_origin_redirects(
+        session,
+        "GET",
+        urljoin(base_url, "/manage/account/"),
+        expected_origin=expected_origin,
+        timeout=timeout,
+    )
+    authentication_failed = False
+    try:
+        _assert_logged_in_response(account)
+    except PyPISessionError:
+        authentication_failed = True
+    if authentication_failed:
+        if confirmation_used:
+            raise InvalidEmailConfirmationError("PyPI email confirmation link is expired or invalid.") from None
+        raise PyPIAuthenticationError("PyPI login did not produce an authenticated session.") from None
+    actual_username = _authenticated_account_username(account)
+    if not actual_username.isascii() or actual_username.lower() != username.lower():
+        raise PyPIAuthenticationError("Authenticated PyPI account identity does not match the requested username.")
     payload = build_session_payload(
         session,
-        username=username,
+        username=actual_username,
         base_url=base_url,
         csrf_token=csrf_token,
         meta={"login_verified_at": _utc_now()},
@@ -723,7 +1234,7 @@ def list_projects_from_payload(
 ) -> dict[str, Any]:
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
-    response = session.get(urljoin(base_url, "/manage/projects/"), timeout=timeout)
+    response = _safe_session_request(session, "GET", urljoin(base_url, "/manage/projects/"), timeout=timeout)
     _assert_logged_in_response(response)
     projects = extract_project_names(response.text)
     return {
@@ -974,7 +1485,7 @@ def add_pending_github_publisher_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _account_publishing_url(base_url)
-    before_response = session.get(url, timeout=timeout)
+    before_response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(before_response)
     before = parse_publishing_page(before_response.text)
     existing = find_pending_github_publisher(
@@ -987,7 +1498,9 @@ def add_pending_github_publisher_from_payload(
         csrf = form.hidden_values().get("csrf_token")
         if csrf is None:
             raise PyPISessionError("Could not find CSRF token in GitHub pending publisher form.")
-        post = session.post(
+        post = _safe_session_request(
+            session,
+            "POST",
             _form_action_url(base_url, form, "/manage/account/publishing/"),
             data={
                 "csrf_token": csrf,
@@ -1040,7 +1553,7 @@ def remove_pending_github_publisher_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _account_publishing_url(base_url)
-    before_response = session.get(url, timeout=timeout)
+    before_response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(before_response)
     before = parse_publishing_page(before_response.text)
     pending = before.get("pending_publishers") or []
@@ -1064,7 +1577,9 @@ def remove_pending_github_publisher_from_payload(
     publisher_id = hidden.get("publisher_id")
     if not csrf or not publisher_id:
         raise PyPISessionError("Pending publisher remove form is missing CSRF token or publisher_id.")
-    post = session.post(
+    post = _safe_session_request(
+        session,
+        "POST",
         _form_action_url(base_url, form, "/manage/account/publishing/"),
         data={"csrf_token": csrf, "publisher_id": publisher_id},
         headers={"Referer": before_response.url, "Origin": base_url},
@@ -1092,7 +1607,7 @@ def publisher_detail_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _project_publishing_url(base_url, project)
-    response = session.get(url, timeout=timeout)
+    response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(response)
     parsed = parse_publishing_page(response.text)
     parsed.update({"capability": "session", "project": project, "source_url": response.url})
@@ -1120,7 +1635,7 @@ def add_github_publisher_to_project_from_payload(
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
     url = _project_publishing_url(base_url, project)
-    before_response = session.get(url, timeout=timeout)
+    before_response = _safe_session_request(session, "GET", url, timeout=timeout)
     _assert_logged_in_response(before_response)
     before = parse_publishing_page(before_response.text)
     existing = find_github_publisher(
@@ -1138,7 +1653,9 @@ def add_github_publisher_to_project_from_payload(
         if csrf is None:
             raise PyPISessionError("Could not find CSRF token in GitHub active publisher form.")
         post_url = _form_action_url(base_url, form, f"/manage/project/{project}/settings/publishing/")
-        post = session.post(
+        post = _safe_session_request(
+            session,
+            "POST",
             post_url,
             data={
                 "csrf_token": csrf,
@@ -1187,7 +1704,7 @@ def list_publishers_from_payload(
 ) -> dict[str, Any]:
     base_url = str(payload.get("base_url") or DEFAULT_BASE_URL).rstrip("/")
     session = requests_session_from_payload(payload)
-    response = session.get(urljoin(base_url, "/manage/account/publishing/"), timeout=timeout)
+    response = _safe_session_request(session, "GET", urljoin(base_url, "/manage/account/publishing/"), timeout=timeout)
     _assert_logged_in_response(response)
     parsed = parse_publishing_page(response.text)
     parsed.update({"capability": "session", "source_url": response.url})
@@ -1210,7 +1727,15 @@ def list_publishers_from_session(
 
 
 __all__ = [
+    "ConfirmationProvider",
     "DEFAULT_BASE_URL",
+    "EmailConfirmationCancelledError",
+    "EmailConfirmationCheckpoint",
+    "EmailConfirmationRequiredError",
+    "EmailConfirmationTimeoutError",
+    "InvalidEmailConfirmationError",
+    "PyPIAuthenticationError",
+    "PyPINetworkError",
     "PyPISessionError",
     "add_github_publisher_to_project_from_payload",
     "add_pending_github_publisher_from_payload",
@@ -1235,5 +1760,6 @@ __all__ = [
     "refresh_chatenv_token",
     "save_session_payload",
     "totp_now",
+    "validate_email_confirmation_base_url",
     "validate_session_payload",
 ]

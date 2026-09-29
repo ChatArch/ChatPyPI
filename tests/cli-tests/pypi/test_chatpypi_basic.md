@@ -169,6 +169,31 @@ chatpypi auth session show --format json
   2. 预期 CLI 非 0 退出。
   3. 预期错误消息明确指出该命令尚未实现，避免自动化误判为成功执行。
 
+## 用例 9：`auth login` 可显式等待邮件确认链接
+
+- 初始环境准备：
+  - matching ChatEnv profile 提供用户名、密码和可选 TOTP secret。
+  - 当前是受支持的 POSIX 主线程交互终端。
+
+预期过程和结果：
+  1. 执行 `chatpypi auth login -e PROFILE --wait-email --wait-timeout 600`。
+  2. 普通密码/TOTP 登录不出现邮件检查点时保持原行为，不额外提示。
+  3. PyPI 返回 `/account/confirm-login/` 检查点时，只等待一次隐藏输入的 HTTPS 确认链接；提示和进度写入 stderr，JSON stdout 仍是单一合法对象。
+  4. 确认链接必须属于当前选择的 `pypi.org` 或 `test.pypi.org` 精确 origin，路径必须精确为 `/account/confirm-login/`，且只有一个非空 `token` query；链接和 token 不得出现在输出或异常链中。
+  5. 确认请求沿用本次登录的 Session 和冻结代理选择，禁止跨 origin 跳转；随后从已认证 account 页面读取实际用户名，并与请求用户名精确匹配。
+  6. 只有完成确认、认证和账号匹配后才写入所选 ChatEnv token profile；失败、超时、取消、过期和账号不匹配都不得改写 token store，`--no-write-token` 仍生效。
+  7. 未传 `--wait-email` 时，邮件检查点返回明确的 confirmation-required 错误；不自动轮询、重新登录或重发邮件。
+  8. `--wait-timeout` 必须是有限正数，并且仅能与 `--wait-email` 一起显式使用；它与 `--timeout` HTTP 超时相互独立。
+  9. 非 TTY、非 POSIX、非主线程、已有调用方 `SIGALRM` handler/timer 的终端等待在解析凭据和发起网络请求前失败。Ctrl-C/EOF 安全取消且非零退出。
+
+Python 自动化应直接调用 `login_to_pypi(..., confirmation_provider=..., confirmation_timeout=...)`。回调接收不含 secret 的检查点描述和剩余秒数；第三方回调必须自行遵守该 deadline，API 只在调用前后检查过期，不承诺强制中断任意 Python 回调。
+
+参考执行脚本（伪代码）：
+
+```sh
+chatpypi auth login -e PROFILE --wait-email --wait-timeout 600 --format json
+```
+
 ## 清理 / 回滚
 
 - 删除临时目录。
