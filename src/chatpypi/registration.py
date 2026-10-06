@@ -889,9 +889,15 @@ class DefaultLocalOps:
             include_workflows=True,
             include_chatenv_provider=False,
         )
+        # Registration prepares source and Publisher only; it must not deploy Pages.
+        for name in ("deploy.yaml", "preview.yaml"):
+            generated = project_dir / ".github" / "workflows" / name
+            if generated.is_file():
+                omitted = _private_subdirectory(workspace, "omitted-docs-workflows")
+                generated.rename(omitted / name)
         return result.project_dir, {
             "module_name": result.module_name,
-            "file_count": len(result.created_files),
+            "file_count": sum(path.is_file() for path in result.created_files),
         }
 
     @staticmethod

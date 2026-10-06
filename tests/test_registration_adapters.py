@@ -19,6 +19,22 @@ def test_api_extra_includes_generated_test_runner():
     assert any(str(dep).startswith("pytest") for dep in metadata["project"]["optional-dependencies"]["api"])
 
 
+def test_registration_scaffold_does_not_auto_deploy_docs(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    local = DefaultLocalOps(_config(tmp_path))
+    plan = {"distribution": "registration_only_demo", "module_name": "registration_only_demo",
+        "initial_version": "0.0.1", "description": "Registration-only scaffold", "requires_python": ">=3.10"}
+    project, receipt = local.scaffold(plan, workspace)
+    workflows = project / ".github/workflows"
+    assert (workflows / "ci.yml").is_file()
+    assert (workflows / "publish.yml").is_file()
+    assert not (workflows / "deploy.yaml").exists()
+    assert not (workflows / "preview.yaml").exists()
+    assert not (project / "src/registration_only_demo/config.py").exists()
+
+
+
 def test_public_protection_adapter_applies_and_reads_exact_policy(monkeypatch, tmp_path):
     from types import SimpleNamespace
 
