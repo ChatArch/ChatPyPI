@@ -93,3 +93,70 @@ def test_client_raises_only_fixed_remote_error_fields():
     assert exc_info.value.category == "target_busy"
     assert exc_info.value.status_code == 409
     assert "/private" not in str(exc_info.value)
+
+
+def test_default_client_transport_rejects_redirects(monkeypatch):
+    from urllib import request as urllib_request
+
+    captured = []
+
+    class Transport:
+        def open(self, request, timeout):
+            return FakeResponse({"status": "ok"})
+
+    def build_opener(*handlers):
+        captured.extend(handlers)
+        return Transport()
+
+    monkeypatch.setattr(urllib_request, "build_opener", build_opener)
+    client = RegistrationAPIClient(
+        "https://packages.example.internal", token="opaque-test-token"
+    )
+    assert captured, "default transport must explicitly disable redirects"
+    handler = next(h for h in captured if isinstance(h, urllib_request.HTTPRedirectHandler))
+    original = urllib_request.Request(
+        "https://packages.example.internal/api/jobs", method="POST",
+        data=b"{}", headers={"Authorization": "Bearer opaque-test-token"},
+    )
+    assert handler.redirect_request(
+        original, None, 302, "Found", {}, "https://other.example/api/jobs"
+    ) is None
+    assert client.health() == {"status": "ok"}
+
+
+def test_client_does_not_trust_remote_messages_or_retain_error_context():
+    canary = "private-peer-error-canary"
+
+    class HTTPFailure(Exception):
+        code = 409
+
+        def read(self, amount=-1):
+            return json.dumps({"error": {"category": "target_busy", "message": canary}}).encode()
+
+    def opener(_request, timeout):
+        raise HTTPFailure(canary)
+
+    client = RegistrationAPIClient(
+        "https://packages.example.internal", token="opaque-test-token", opener=opener
+    )
+    with pytest.raises(RegistrationAPIError) as caught:
+        client.get_job("job-1")
+    assert canary not in str(caught.value)
+    assert caught.value.category == "target_busy"
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_client_invalid_json_error_has_no_raw_decoder_context():
+    class BadJSON(FakeResponse):
+        def read(self, amount=-1):
+            return b'{"private-peer-error-canary"'
+
+    client = RegistrationAPIClient(
+        "https://packages.example.internal", token="opaque-test-token",
+        opener=lambda request, timeout: BadJSON({}),
+    )
+    with pytest.raises(RegistrationAPIError) as caught:
+        client.capabilities()
+    assert caught.value.category == "invalid_response"
+    assert caught.value.__context__ is None

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 
 from chatpypi.api import create_app
 from chatpypi.registration import RegistrationManager, ServiceConfig
@@ -40,6 +41,37 @@ def _manager(config: ServiceConfig) -> RegistrationManager:
         local_ops=FakeLocalOps([]),
         start_executor=False,
     )
+
+
+@pytest.mark.parametrize("padding", ["leading", "trailing"])
+def test_surrounding_confirmation_whitespace_is_rejected(tmp_path, padding):
+    config = _config(tmp_path)
+    manager = _manager(config)
+    app = create_app(config=config, manager=manager)
+
+    async def scenario():
+        async with _api_client(app) as client:
+            response = await client.post(
+                "/api/plans", headers=AUTH,
+                json={"distribution": "Demo_Pkg", "owner": "ChatArch"},
+            )
+            assert response.status_code == 201
+            plan = response.json()
+            confirmation = (
+                " " + plan["confirmation"] if padding == "leading"
+                else plan["confirmation"] + " "
+            )
+            submitted = await client.post(
+                "/api/jobs",
+                headers={**AUTH, "Idempotency-Key": "exact-whitespace-0001"},
+                json={"plan_id": plan["id"], "confirmation": confirmation},
+            )
+            assert submitted.status_code == 409
+            assert submitted.json()["error"]["category"] == "confirmation_mismatch"
+            assert (await client.get("/api/jobs", headers=AUTH)).json()["count"] == 0
+
+    asyncio.run(scenario())
+
 
 
 @asynccontextmanager

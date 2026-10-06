@@ -46,6 +46,8 @@ class PlanRequest(_StrictModel):
 
 
 class JobRequest(_StrictModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
     plan_id: str = Field(min_length=36, max_length=36)
     confirmation: str = Field(min_length=1, max_length=256)
 
@@ -159,6 +161,9 @@ class StageReceipt(_StrictModel):
     workflow: str | None = None
     default_branch: str | None = None
     default_branch_protected: bool | None = None
+    installed: bool | None = None
+    cli_tree: bool | None = None
+    verified: bool | None = None
 
 
 class JobResponse(_StrictModel):

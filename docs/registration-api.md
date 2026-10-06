@@ -91,7 +91,7 @@ Authorization: Bearer <service-token>
 
 - distribution/repository、PEP 503 normalized name、Python module；
 - owner、visibility、description；
-- `initial_version=0.1.0`、`requires_python=>=3.10`、`template=chatarch`；
+- `initial_version=0.0.1`、`requires_python=>=3.10`、`template=chatarch`；
 - `default_branch=main`、`workflow_filename=publish.yml`；
 - 完整 stages、plan digest、`ready` / `blockers`；
 - server 生成的 exact `confirmation`。
@@ -121,17 +121,18 @@ job 读模型固定包含 `id`、`plan_id`、`normalized_name`、`status`、`sta
 
 ```text
 credentials → preflight → scaffold → tests → build_check
-→ pypi_upload → pypi_readback → github_repository → source_push
-→ trusted_publisher → github_readback → registered
+→ pypi_upload → pypi_readback → public_install → github_repository → source_push
+→ [public_protection] → trusted_publisher → github_readback → registered
 ```
 
 重要边界：
 
 - job 开始时重新 preflight；只有名字仍然 absent 才执行初始 placeholder upload；
 - scaffold/build/check 复用 ChatPyPI Python API；build 使用服务环境中已安装依赖的 no-isolation 模式，tests/build/twine/git 都使用清理过的最小环境、固定 argv、`shell=False`、noninteractive 和有界时间/输出；
-- PyPI 精确 `0.1.0` wheel + sdist readback 成功后，才用 ChatGH importable API 创建 GitHub repo；
+- PyPI 精确 `0.0.1` wheel + sdist readback 后，还必须通过官方 Simple index 的无缓存 clean-install、已安装版本与真实 CLI 树验证，才用 ChatGH importable API 创建 GitHub repo；
 - 初始源码 push 后，配置并读回 active exact GitHub Trusted Publisher；普通路径不创建 pending Publisher；
-- 最后读回计划内 visibility、`main` default branch 和 protection 状态；protection 可以是 true/false，但必须可确定；
+- public 计划在初始 push 后立即应用并读回 `main` 保护：要求 PR、review count=0、enforce admins、禁止 force push/删除；缺失保护不能完成。private 计划不自动应用 public 保护；
+- 终态前再次读回计划内 visibility、`main` default branch 和保护策略；
 - 终态叫 `registered`。它不表示后续 tag/OIDC feature release 已执行。
 
 在首次 external write 前发现缺失/失效认证时，job 得到 `blocked/needs_auth`。一旦 mutation 已开始，后续认证失败、timeout、readback/receipt 失败或进程中断都得到 `reconciliation_required`；服务重启不会自动重放。operator 必须先核对 provider 状态，再决定新的计划/人工处置。

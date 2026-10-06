@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+import tomlkit
 
 from chatpypi.main import CommandResult, RepositoryCheck, ScaffoldResult
 from chatpypi.registration import (
@@ -11,6 +12,55 @@ from chatpypi.registration import (
     DefaultProviderBackend,
     ServiceConfig,
 )
+
+
+def test_api_extra_includes_generated_test_runner():
+    metadata = tomlkit.parse((Path(__file__).parents[1] / "pyproject.toml").read_text())
+    assert any(str(dep).startswith("pytest") for dep in metadata["project"]["optional-dependencies"]["api"])
+
+
+def test_public_protection_adapter_applies_and_reads_exact_policy(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    backend = DefaultProviderBackend(_config(tmp_path))
+    monkeypatch.setattr(backend, "_github_token", lambda: "opaque-test-value")
+    calls = []
+    policy = {
+        "required_pull_request_reviews": {"required_approving_review_count": 0},
+        "enforce_admins": {"enabled": True},
+        "allow_force_pushes": {"enabled": False},
+        "allow_deletions": {"enabled": False},
+    }
+
+    class Branch:
+        def edit_protection(self, **kwargs):
+            calls.append(("write", kwargs))
+
+        def get_protection(self):
+            calls.append(("read", None))
+            return SimpleNamespace(raw_data=policy)
+
+    class Repo:
+        def get_branch(self, name):
+            assert name == "main"
+            return Branch()
+
+    class Client:
+        def get_repo(self, full_name):
+            assert full_name == "ChatArch/Demo_Pkg"
+            return Repo()
+
+    monkeypatch.setattr("chatgh.github.api.get_client", lambda *args, **kwargs: Client())
+    operation = getattr(backend, "apply_public_protection", None)
+    assert callable(operation)
+    assert operation("ChatArch", "Demo_Pkg", "main") == {"verified": True}
+    assert [kind for kind, data in calls] == ["write", "read"]
+    fields = calls[0][1]
+    assert fields["enforce_admins"] is True
+    assert fields["required_approving_review_count"] == 0
+    assert fields["allow_force_pushes"] is False
+    assert fields["allow_deletions"] is False
+
 
 
 def _config(tmp_path: Path) -> ServiceConfig:
@@ -93,7 +143,7 @@ def test_default_local_ops_reuse_scaffold_build_check_and_fixed_pytest(
         scaffold_calls.append((distribution, project_dir, kwargs))
         return ScaffoldResult(project_dir, distribution, "demo_pkg", [created])
 
-    wheel = project / "dist" / "demo_pkg-0.1.0-py3-none-any.whl"
+    wheel = project / "dist" / "demo_pkg-0.0.1-py3-none-any.whl"
     build_calls = []
 
     def fake_build(project_dir, **kwargs):
@@ -114,7 +164,7 @@ def test_default_local_ops_reuse_scaffold_build_check_and_fixed_pytest(
     plan = {
         "distribution": "demo-pkg",
         "module_name": "demo_pkg",
-        "initial_version": "0.1.0",
+        "initial_version": "0.0.1",
         "description": "A small package",
         "requires_python": ">=3.10",
     }
@@ -170,7 +220,7 @@ def test_default_local_ops_real_scaffold_and_tests_stay_in_tmp(tmp_path):
     plan = {
         "distribution": "local-registration-demo",
         "module_name": "local_registration_demo",
-        "initial_version": "0.1.0",
+        "initial_version": "0.0.1",
         "description": "Local registration adapter smoke",
         "requires_python": ">=3.10",
     }
@@ -201,7 +251,7 @@ def test_initial_upload_is_noninteractive_and_does_not_return_secret(
     project = tmp_path / "project"
     project.mkdir()
 
-    result = backend.upload_initial(project, "demo-pkg", "0.1.0", [])
+    result = backend.upload_initial(project, "demo-pkg", "0.0.1", [])
 
     assert result == {"uploaded": True}
     assert captured["username"] == "__token__"
@@ -303,6 +353,12 @@ def test_active_publisher_and_repository_readback_are_importable_calls(
     publisher = backend.add_active_publisher(
         "demo-pkg", "ChatArch", "demo-pkg", "publish.yml"
     )
+    monkeypatch.setattr(backend, "_read_protection_policy", lambda *args: {
+        "required_pull_request_reviews": {"required_approving_review_count": 0},
+        "enforce_admins": {"enabled": True},
+        "allow_force_pushes": {"enabled": False},
+        "allow_deletions": {"enabled": False},
+    })
     repository = backend.read_repository(
         "ChatArch", "demo-pkg", "public", "main"
     )
@@ -320,5 +376,6 @@ def test_active_publisher_and_repository_readback_are_importable_calls(
         "default_branch": "main",
         "default_branch_protected": True,
         "readback_complete": True,
+        "protection_policy_verified": True,
         "url": "https://github.com/ChatArch/demo-pkg",
     }

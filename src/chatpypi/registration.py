@@ -35,6 +35,7 @@ from chatenv.paths import get_paths
 from chatenv.store import EnvStore
 
 from chatpypi.config import RegistrationAPIConfig, load_active_pypi_env
+from chatpypi.registration_errors import ERROR_STATUS_CODES, SAFE_ERROR_MESSAGES
 from chatpypi.main import (
     CommandResult,
     PyPICommandError,
@@ -54,7 +55,7 @@ from chatpypi.session_ops import (
 )
 
 
-INITIAL_VERSION = "0.1.0"
+INITIAL_VERSION = "0.0.1"
 DEFAULT_BRANCH = "main"
 PUBLISH_WORKFLOW = "publish.yml"
 REGISTRATION_STAGES = (
@@ -65,8 +66,10 @@ REGISTRATION_STAGES = (
     "build_check",
     "pypi_upload",
     "pypi_readback",
+    "public_install",
     "github_repository",
     "source_push",
+    "public_protection",
     "trusted_publisher",
     "github_readback",
 )
@@ -77,51 +80,6 @@ MAX_COMMAND_OUTPUT = 16 * 1024
 _DIST_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$")
 _OWNER_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$")
-
-SAFE_ERROR_MESSAGES = {
-    "invalid_request": "Request validation failed.",
-    "unsafe_state": "Registration state storage failed a safety check.",
-    "service_auth_missing": "Service authentication is not configured.",
-    "origin_rejected": "Browser-origin API requests are not accepted.",
-    "needs_auth": "Required provider authentication is unavailable or invalid.",
-    "preflight_unknown": "A required provider read could not be verified.",
-    "target_unavailable": "The requested package or repository target is unavailable.",
-    "confirmation_mismatch": "Exact registration target confirmation does not match the plan.",
-    "idempotency_conflict": "The idempotency key was already used for another submission.",
-    "target_busy": "A registration job already owns this normalized name.",
-    "queue_full": "The registration queue is full.",
-    "executor_locked": "Another registration executor already owns this state directory.",
-    "registration_disabled": "Registration writes are disabled by service configuration.",
-    "plan_not_found": "Registration plan was not found.",
-    "job_not_found": "Registration job was not found.",
-    "local_execution": "Local package preparation failed.",
-    "external_outcome_unknown": (
-        "An external write outcome is unknown and requires reconciliation."
-    ),
-    "interrupted": "The job was interrupted and requires reconciliation before any retry.",
-}
-
-ERROR_STATUS_CODES = {
-    "invalid_request": 400,
-    "unsafe_state": 500,
-    "service_auth_missing": 500,
-    "origin_rejected": 403,
-    "needs_auth": 409,
-    "preflight_unknown": 409,
-    "target_unavailable": 409,
-    "confirmation_mismatch": 409,
-    "idempotency_conflict": 409,
-    "target_busy": 409,
-    "queue_full": 429,
-    "executor_locked": 503,
-    "registration_disabled": 403,
-    "plan_not_found": 404,
-    "job_not_found": 404,
-    "local_execution": 500,
-    "external_outcome_unknown": 409,
-    "interrupted": 409,
-}
-
 
 class RegistrationError(RuntimeError):
     """A safe, categorized error suitable for durable/public state."""
@@ -793,6 +751,8 @@ class LocalOps(Protocol):
 
     def build_and_check(self, project_dir: Path) -> tuple[list[Path], dict[str, Any]]: ...
 
+    def verify_public_install(self, plan: dict[str, Any], project_dir: Path) -> dict[str, Any]: ...
+
 
 class ProviderBackend(Protocol):
     def preflight(self, distribution: str, owner: str) -> dict[str, Any]: ...
@@ -824,6 +784,8 @@ class ProviderBackend(Protocol):
     def read_repository(
         self, owner: str, repository: str, visibility: str, branch: str
     ) -> dict[str, Any]: ...
+
+    def apply_public_protection(self, owner: str, repository: str, branch: str) -> dict[str, Any]: ...
 
 
 class BoundedRunner:
@@ -925,7 +887,7 @@ class DefaultLocalOps:
             template="chatarch",
             include_mkdocs=True,
             include_workflows=True,
-            include_chatenv_provider=True,
+            include_chatenv_provider=False,
         )
         return result.project_dir, {
             "module_name": result.module_name,
@@ -967,6 +929,51 @@ class DefaultLocalOps:
         )
         check_distributions(project_dir, strict=True, runner=isolated_runner)
         return artifacts, {"artifacts": [path.name for path in artifacts]}
+
+    def verify_public_install(self, plan: dict[str, Any], project_dir: Path) -> dict[str, Any]:
+        """Resolve the public package by name before repository creation."""
+        workspace = project_dir.parent
+        venv_dir = _private_subdirectory(workspace, "public-install")
+        env = self._command_env(project_dir)
+        env.pop("PIP_NO_INDEX", None)
+        env.pop("VIRTUAL_ENV", None)
+        for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+            if os.environ.get(key):
+                env[key] = os.environ[key]
+        self._require_success(self.runner(
+            [sys.executable, "-m", "venv", str(venv_dir)], workspace, env=env
+        ))
+        python = venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        requirement = f"{plan['distribution']}=={plan['initial_version']}"
+        install = [str(python), "-m", "pip", "--isolated", "install", "--no-cache-dir",
+            "--only-binary=:all:", "--index-url", "https://pypi.org/simple", requirement]
+        for attempt in range(3):
+            result = self.runner(install, workspace, env=env)
+            if result.returncode == 0:
+                break
+            if attempt == 2:
+                self._require_success(result)
+            time.sleep(2.0)
+        code = (
+            "import importlib,importlib.metadata,inspect,sys;"
+            "m=importlib.import_module(sys.argv[2]);"
+            "assert importlib.metadata.version(sys.argv[1])==sys.argv[3];"
+            "assert 'site-packages' in inspect.getfile(m)"
+        )
+        self._require_success(self.runner(
+            [str(python), "-I", "-c", code, plan["distribution"], plan["module_name"], plan["initial_version"]],
+            workspace, env=env,
+        ))
+        cli = venv_dir / ("Scripts" if os.name == "nt" else "bin") / plan["module_name"]
+        version = self.runner([str(cli), "--version"], workspace, env=env)
+        self._require_success(version)
+        if plan["initial_version"] not in version.stdout:
+            raise PyPICommandError("Public package version could not be verified.")
+        tree = self.runner([str(cli), "--tree"], workspace, env=env)
+        self._require_success(tree)
+        if plan["module_name"] not in tree.stdout or "--help" not in tree.stdout:
+            raise PyPICommandError("Public package CLI tree could not be verified.")
+        return {"installed": True, "version": plan["initial_version"], "cli_tree": True}
 
 
 class DefaultProviderBackend:
@@ -1092,7 +1099,9 @@ class DefaultProviderBackend:
     def upload_initial(
         self, project_dir: Path, distribution: str, version: str, artifacts: list[Path]
     ) -> dict[str, Any]:
-        del distribution, version, artifacts
+        if version != INITIAL_VERSION:
+            raise RegistrationError("invalid_request")
+        del distribution, artifacts
         token = self._pypi_values().get("PYPI_API_TOKEN")
         if not token:
             raise RegistrationError("needs_auth")
@@ -1302,6 +1311,44 @@ class DefaultProviderBackend:
         )
         return {"active": result.get("ok") is True, "workflow": workflow_filename}
 
+    @staticmethod
+    def _protection_policy_matches(data: dict[str, Any]) -> bool:
+        reviews = data.get("required_pull_request_reviews")
+        return (
+            isinstance(reviews, dict)
+            and type(reviews.get("required_approving_review_count")) is int
+            and reviews["required_approving_review_count"] == 0
+            and isinstance(data.get("enforce_admins"), dict)
+            and data["enforce_admins"].get("enabled") is True
+            and isinstance(data.get("allow_force_pushes"), dict)
+            and data["allow_force_pushes"].get("enabled") is False
+            and isinstance(data.get("allow_deletions"), dict)
+            and data["allow_deletions"].get("enabled") is False
+        )
+
+    def apply_public_protection(self, owner: str, repository: str, branch: str) -> dict[str, Any]:
+        from chatgh.github.api import get_client
+
+        token = self._github_token()
+        if not token:
+            raise RegistrationError("needs_auth")
+        target = get_client(token, require_token=True).get_repo(f"{owner}/{repository}").get_branch(branch)
+        target.edit_protection(
+            enforce_admins=True, required_approving_review_count=0,
+            dismiss_stale_reviews=False, require_code_owner_reviews=False,
+            allow_force_pushes=False, allow_deletions=False,
+        )
+        data = target.get_protection().raw_data
+        return {"verified": self._protection_policy_matches(data)}
+
+    def _read_protection_policy(self, owner: str, repository: str, branch: str) -> dict[str, Any]:
+        from chatgh.github.api import get_client
+
+        token = self._github_token()
+        if not token:
+            raise RegistrationError("needs_auth")
+        return get_client(token, require_token=True).get_repo(f"{owner}/{repository}").get_branch(branch).get_protection().raw_data
+
     def read_repository(
         self, owner: str, repository: str, visibility: str, branch: str
     ) -> dict[str, Any]:
@@ -1325,11 +1372,17 @@ class DefaultProviderBackend:
                 continue
             protected = protection.get("default_branch_protected")
             complete = not protection.get("errors") and protected in {True, False}
+            policy_verified = False
+            if visibility == "public":
+                data = self._read_protection_policy(owner, repository, branch)
+                policy_verified = self._protection_policy_matches(data)
+                complete = complete and protected is True and policy_verified
             last_result = {
                 "visibility": repo.get("visibility"),
                 "default_branch": repo.get("default_branch"),
                 "default_branch_protected": protected,
                 "readback_complete": complete,
+                "protection_policy_verified": policy_verified,
                 "url": f"https://github.com/{owner}/{repository}",
             }
             if (
@@ -1535,7 +1588,7 @@ class RegistrationManager:
             "template": "chatarch",
             "default_branch": DEFAULT_BRANCH,
             "workflow_filename": PUBLISH_WORKFLOW,
-            "stages": list(REGISTRATION_STAGES),
+            "stages": [stage for stage in REGISTRATION_STAGES if stage != "public_protection" or request["visibility"] == "public"],
             "confirmation": confirmation,
             "ready": not item["blockers"],
             "blockers": item["blockers"],
@@ -1773,6 +1826,12 @@ class RegistrationManager:
                 },
             )
 
+            self._stage(job_id, "public_install")
+            installed = self.local_ops.verify_public_install(plan, project_dir)
+            if installed.get("installed") is not True or installed.get("version") != plan["initial_version"] or installed.get("cli_tree") is not True:
+                raise _ReconciliationRequired()
+            self._receipt(job_id, "public_install", installed)
+
             self._stage(job_id, "github_repository")
             created = self._external_write(
                 lambda: self.backend.create_repository(
@@ -1809,6 +1868,15 @@ class RegistrationManager:
                 {"branch": plan["default_branch"], "pushed": True},
             )
 
+            if plan["visibility"] == "public":
+                self._stage(job_id, "public_protection")
+                governance = self._external_write(lambda: self.backend.apply_public_protection(
+                    plan["owner"], plan["repository"], plan["default_branch"]
+                ))
+                if governance.get("verified") is not True:
+                    raise _ReconciliationRequired()
+                self._receipt(job_id, "public_protection", {"verified": True})
+
             self._stage(job_id, "trusted_publisher")
             publisher = self._external_write(
                 lambda: self.backend.add_active_publisher(
@@ -1844,6 +1912,8 @@ class RegistrationManager:
                 raise _ReconciliationRequired()
             protected = repository.get("default_branch_protected")
             if protected not in {True, False}:
+                raise _ReconciliationRequired()
+            if plan["visibility"] == "public" and (protected is not True or repository.get("protection_policy_verified") is not True):
                 raise _ReconciliationRequired()
             self._receipt(
                 job_id,

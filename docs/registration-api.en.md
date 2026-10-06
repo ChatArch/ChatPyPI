@@ -91,7 +91,7 @@ Visibility defaults to `private`; a public repository requires explicit `visibil
 
 - distribution/repository, PEP 503 normalized name, and Python module;
 - owner, visibility, and description;
-- `initial_version=0.1.0`, `requires_python=>=3.10`, and `template=chatarch`;
+- `initial_version=0.0.1`, `requires_python=>=3.10`, and `template=chatarch`;
 - `default_branch=main` and `workflow_filename=publish.yml`;
 - all stages, plan digest, `ready` / `blockers`, and a server-generated exact `confirmation`.
 
@@ -120,17 +120,18 @@ One executor writer runs:
 
 ```text
 credentials → preflight → scaffold → tests → build_check
-→ pypi_upload → pypi_readback → github_repository → source_push
-→ trusted_publisher → github_readback → registered
+→ pypi_upload → pypi_readback → public_install → github_repository → source_push
+→ [public_protection] → trusted_publisher → github_readback → registered
 ```
 
 Key boundaries:
 
 - The job preflights again and performs the initial placeholder upload only while the name is still absent.
 - Scaffold/build/check reuse ChatPyPI APIs. Build uses already-installed service dependencies in no-isolation mode; test/build/twine/git commands use a sanitized minimal environment, fixed argv, `shell=False`, noninteractive mode, and bounded time/output.
-- Exact PyPI `0.1.0` wheel and sdist readback must succeed before repository creation through importable ChatGH APIs.
+- Exact PyPI `0.0.1` wheel/sdist readback and a cache-disabled clean installation by name from the official Simple index must pass before repository creation. The installed version and real CLI tree are verified.
 - After the initial push, the workflow adds and reads back the active exact GitHub Trusted Publisher. It does not use the pending Publisher path.
-- Final readback verifies planned visibility, the `main` default branch, and a determinate protection state. Protection may be true or false, but the read itself must be complete.
+- Public plans apply and read back `main` protection immediately after the initial push: PR required, zero required approvals, enforced admins, and force-push/deletion disabled. Unprotected public repositories cannot complete. Private plans do not automatically apply this public policy.
+- Final readback verifies planned visibility, the `main` default branch, and the protection policy.
 - The terminal state is `registered`; it does not claim a later tag/OIDC feature release happened.
 
 Missing or invalid auth detected before the first external write yields `blocked/needs_auth`. Once a mutation has started, later auth failure, timeout, failed readback/receipt, or process interruption yields `reconciliation_required` and is never automatically replayed. An operator must reconcile provider state first.

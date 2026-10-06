@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from dataclasses import replace
 import os
 from pathlib import Path
@@ -38,11 +37,15 @@ class FakeLocalOps:
         self.events.append("build_check")
         dist = project_dir / "dist"
         dist.mkdir()
-        wheel = dist / "demo_pkg-0.1.0-py3-none-any.whl"
-        sdist = dist / "demo_pkg-0.1.0.tar.gz"
+        wheel = dist / "demo_pkg-0.0.1-py3-none-any.whl"
+        sdist = dist / "demo_pkg-0.0.1.tar.gz"
         wheel.write_bytes(b"wheel")
         sdist.write_bytes(b"sdist")
         return [wheel, sdist], {"artifacts": [wheel.name, sdist.name]}
+
+    def verify_public_install(self, plan, project_dir):
+        self.events.append("public_install")
+        return {"installed": True, "version": plan["initial_version"], "cli_tree": True}
 
 
 class FakeBackend:
@@ -51,6 +54,7 @@ class FakeBackend:
         self.auth_ready = auth_ready
         self.create_calls = 0
         self.timeout_on_create = False
+        self.protected = False
 
     def preflight(self, distribution: str, owner: str) -> dict:
         self.events.append("preflight")
@@ -117,10 +121,16 @@ class FakeBackend:
         return {
             "visibility": visibility,
             "default_branch": branch,
-            "default_branch_protected": False,
+            "default_branch_protected": self.protected,
+            "protection_policy_verified": self.protected,
             "readback_complete": True,
             "url": f"https://github.com/{owner}/{repository}",
         }
+
+    def apply_public_protection(self, owner, repository, branch):
+        self.events.append("public_protection")
+        self.protected = True
+        return {"verified": True}
 
 
 def _config(tmp_path: Path, *, enabled: bool = True) -> ServiceConfig:
@@ -144,6 +154,84 @@ def _request(name: str = "Demo_Pkg", *, visibility: str = "private") -> dict:
         "owner": "ChatArch",
         "visibility": visibility,
     }
+
+
+def test_initial_registration_uses_name_claim_placeholder_version():
+    from chatpypi.registration import INITIAL_VERSION
+
+    assert INITIAL_VERSION == "0.0.1"
+
+
+def test_public_install_precedes_repository_creation(tmp_path):
+    events = []
+
+    class Local(FakeLocalOps):
+        def verify_public_install(self, plan, project_dir):
+            events.append("public_install")
+            return {"installed": True, "version": plan["initial_version"], "cli_tree": True}
+
+    backend = FakeBackend(events)
+    with RegistrationManager(_config(tmp_path), backend=backend, local_ops=Local(events), start_executor=False) as manager:
+        plan = manager.create_plan(_request())
+        job, _ = manager.submit_job(plan["id"], plan["confirmation"], "public-install-gate-0001")
+        manager.run_job(job["id"])
+        assert "public_install" in events
+        assert events.index("public_install") < events.index("github_create")
+
+
+def test_failed_public_install_does_not_create_repository(tmp_path):
+    events = []
+
+    class Local(FakeLocalOps):
+        def verify_public_install(self, plan, project_dir):
+            raise RuntimeError("public index not ready")
+
+    backend = FakeBackend(events)
+    with RegistrationManager(_config(tmp_path), backend=backend, local_ops=Local(events), start_executor=False) as manager:
+        plan = manager.create_plan(_request())
+        job, _ = manager.submit_job(plan["id"], plan["confirmation"], "public-install-gate-0002")
+        manager.run_job(job["id"])
+        assert backend.create_calls == 0
+        assert manager.get_job(job["id"])["status"] == "reconciliation_required"
+
+
+def test_public_registration_applies_and_requires_protection(tmp_path):
+    events = []
+
+    class Protected(FakeBackend):
+        protected = False
+
+        def apply_public_protection(self, owner, repository, branch):
+            events.append("public_protection")
+            self.protected = True
+            return {"verified": True}
+
+        def read_repository(self, owner, repository, visibility, branch):
+            result = super().read_repository(owner, repository, visibility, branch)
+            result["default_branch_protected"] = self.protected
+            result["protection_policy_verified"] = self.protected
+            return result
+
+    with RegistrationManager(_config(tmp_path), backend=Protected(events), local_ops=FakeLocalOps(events), start_executor=False) as manager:
+        plan = manager.create_plan(_request(visibility="public"))
+        job, _ = manager.submit_job(plan["id"], plan["confirmation"], "public-protection-0001")
+        manager.run_job(job["id"])
+        assert "public_protection" in events
+        assert manager.get_job(job["id"])["status"] == "registered"
+
+
+def test_public_registration_cannot_succeed_with_unprotected_main(tmp_path):
+    events = []
+
+    class Unprotected(FakeBackend):
+        def apply_public_protection(self, owner, repository, branch):
+            return {"verified": False}
+
+    with RegistrationManager(_config(tmp_path), backend=Unprotected(events), local_ops=FakeLocalOps(events), start_executor=False) as manager:
+        plan = manager.create_plan(_request(visibility="public"))
+        job, _ = manager.submit_job(plan["id"], plan["confirmation"], "public-protection-0002")
+        manager.run_job(job["id"])
+        assert manager.get_job(job["id"])["status"] == "reconciliation_required"
 
 
 def test_name_normalization_and_python_module_validation(tmp_path):
@@ -195,7 +283,7 @@ def test_plan_confirmation_idempotency_and_normalized_name_exclusion(tmp_path):
         plan = manager.create_plan(_request())
         assert plan["normalized_name"] == "demo-pkg"
         assert plan["module_name"] == "demo_pkg"
-        assert plan["initial_version"] == "0.1.0"
+        assert plan["initial_version"] == "0.0.1"
         assert plan["visibility"] == "private"
         assert plan["confirmation"].startswith("register:demo-pkg:")
         plan["description"] = "caller-side mutation"
@@ -251,14 +339,16 @@ def test_registration_workflow_orders_readback_before_github_and_ends_registered
             "build_check",
             "upload",
             "pypi_readback",
+            "public_install",
             "github_create",
             "push",
+            "public_protection",
             "publisher",
             "github_readback",
         ]
         assert all("unsafe detail" not in str(item) for item in completed["receipts"])
         workspace = manager.store.workspaces / job["id"]
-        artifact = workspace / "project" / "dist" / "demo_pkg-0.1.0.tar.gz"
+        artifact = workspace / "project" / "dist" / "demo_pkg-0.0.1.tar.gz"
         assert os.stat(workspace / "project").st_mode & 0o777 == 0o700
         assert os.stat(artifact).st_mode & 0o777 == 0o600
     finally:

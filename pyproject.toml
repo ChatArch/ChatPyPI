@@ -33,6 +33,7 @@ PyPI = "chatpypi.session_ops:refresh_chatenv_token"
 
 [project.optional-dependencies]
 api = [
+    "pytest>=8,<10",
     "fastapi>=0.110,<1",
     "pydantic>=2.7,<3",
     "uvicorn>=0.29,<1",
