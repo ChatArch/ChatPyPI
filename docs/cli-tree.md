@@ -21,6 +21,8 @@ chatpypi                  # Python 包生命周期与 PyPI 操作入口
 ├── publisher             # 读取或配置 Trusted Publisher
 ├── token                 # 规划 / checkpoint：PyPI API token 管理
 ├── doctor                # 本地配置、session 和安全边界检查
+├── paths                 # 读取 ChatArch-owned registration runtime 路径
+├── serve                 # 启动受保护的 registration-only HTTP API
 ├── docs                  # 输出文档链接和示例命令
 ├── init                  # 兼容快捷入口：创建 src-layout Python 包
 ├── build                 # 兼容快捷入口：构建 wheel / sdist
@@ -59,6 +61,15 @@ chatpypi probe            # 兼容 `chatpypi pkg probe`
 ```
 
 `pkg init -t chatarch` 是当前模板更新的核心入口：它生成 README、MkDocs、CLI 树、能力地图、接口树、CI/Preview/Deploy workflow 和 ChatEnv provider。默认文档只保留结构化占位，不生成计划页或仓库级域名文件。
+
+## 注册 API 服务
+
+```text
+chatpypi paths [--format text|json]   # 本机只读 state ownership 回读
+chatpypi serve [--host HOST] [--port PORT]
+```
+
+`serve` 是 `chatpypi.registration.RegistrationManager` 和 `chatpypi.api.create_app` 的薄入口；FastAPI/uvicorn 只在执行命令时延迟导入，并由 `[api]` extra 提供。配置、路由、confirmation/idempotency 和 reconciliation 语义见 [注册 API 服务](registration-api.md)。
 
 ## 认证和 Session
 

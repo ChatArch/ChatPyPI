@@ -29,6 +29,21 @@ class PyPIConfig(BaseEnvConfig):
         print("Schema loaded; no network test is required.")
 
 
+class RegistrationAPIConfig(BaseEnvConfig):
+    """Registration API service configuration (never request-controlled)."""
+
+    _title = "ChatPyPI Registration API Configuration"
+    _aliases = ["chatpypi-api", "registration-api"]
+    _storage_dir = "ChatPyPIAPI"
+
+    @classmethod
+    def test(cls) -> None:
+        """Validate schema registration without starting a server."""
+
+        print(f"Testing {cls._title}...")
+        print("Schema loaded; no listener or provider request was started.")
+
+
 def load_active_pypi_env(home: str | Path | None = None) -> dict[str, str]:
     """Load active PyPI typed env values from ChatEnv/ChatArch home."""
 
@@ -125,6 +140,80 @@ setattr(
     "PYPI_USERNAME",
     EnvField("PYPI_USERNAME", desc="PyPI username"),
 )
+
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_TOKEN",
+    EnvField(
+        "CHATPYPI_API_TOKEN",
+        desc="Bearer token for non-health API routes",
+        is_sensitive=True,
+    ),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_HOST",
+    EnvField("CHATPYPI_API_HOST", default="127.0.0.1", desc="API listen host"),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_PORT",
+    EnvField("CHATPYPI_API_PORT", default="8765", desc="API listen port"),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_ALLOWED_HOSTS",
+    EnvField(
+        "CHATPYPI_API_ALLOWED_HOSTS",
+        default="127.0.0.1,localhost,[::1]",
+        desc="Comma-separated trusted HTTP Host values; wildcard is forbidden",
+    ),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_ALLOWED_OWNERS",
+    EnvField(
+        "CHATPYPI_API_ALLOWED_OWNERS",
+        default="ChatArch",
+        desc="Comma-separated GitHub owner allowlist",
+    ),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_REGISTRATION_ENABLED",
+    EnvField(
+        "CHATPYPI_REGISTRATION_ENABLED",
+        default="false",
+        desc="Explicit external registration write gate",
+    ),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_MAX_BODY_BYTES",
+    EnvField(
+        "CHATPYPI_API_MAX_BODY_BYTES",
+        default="65536",
+        desc="Maximum JSON request body",
+    ),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_MAX_QUEUE",
+    EnvField(
+        "CHATPYPI_API_MAX_QUEUE",
+        default="32",
+        desc="Maximum queued/running jobs",
+    ),
+)
+setattr(
+    RegistrationAPIConfig,
+    "CHATPYPI_API_RATE_LIMIT_PER_MINUTE",
+    EnvField(
+        "CHATPYPI_API_RATE_LIMIT_PER_MINUTE",
+        default="120",
+        desc="Per-client limit for authenticated API-path requests",
+    ),
+)
 setattr(
     PyPIConfig,
     "PYPI_EMAIL",
@@ -159,6 +248,7 @@ setattr(
 __all__ = [
     "resolve_pypi_proxy_url",
     "PyPIConfig",
+    "RegistrationAPIConfig",
     "load_active_pypi_env",
     "load_pypi_env_profile",
     "save_active_pypi_env_value",

@@ -95,6 +95,8 @@ chatpypi
 │   └── revoke
 ├── doctor
 │   └── check
+├── paths
+├── serve
 └── docs
     ├── links
     ├── examples
@@ -111,6 +113,8 @@ Current implementation focus:
 - `publisher list` / `publisher detail`: read account-level and project-level Trusted Publisher state
 - `publisher add-github`: directly add or idempotently verify a GitHub active Trusted Publisher for an existing PyPI project, with readback verification
 - `publisher pending-list` / `pending-add` / `pending-remove`: only for truly pending pre-registration exceptions or stale pending cleanup; this is not the default Publisher path
+- `serve`: run the registration-only HTTP API with external writes disabled by default and Bearer auth on every non-health route
+- `paths`: read back the ChatArch-owned registration runtime paths
 - `docs`: documentation links and example commands
 
 The new-device email checkpoint during login now has an explicit bounded wait. Account registration, email-address verification, 2FA bootstrap, token create/revoke, and other flows that need human validation, QR/device checks, or complex checkpoints remain checkpoint-aware. Publisher writes for existing PyPI projects should not be pending; use `publisher add-github` and read back the active publisher.
@@ -130,6 +134,21 @@ export PYPI_API_TOKEN=...
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
 
+## Registration API
+
+Serving dependencies remain in an optional extra, so the base CLI does not force-install FastAPI/uvicorn:
+
+```bash
+python -m pip install "ChatPyPI[api]"
+chatenv new -t chatpypi-api default
+chatpypi paths --format json
+chatpypi serve
+```
+
+The API provides authenticated preflight, immutable plans, exact confirmation plus `Idempotency-Key` submission, and job reads. It defaults to loopback with the registration write gate off; public visibility must be explicit in the plan. Terminal `registered` means the initial PyPI package, GitHub source, active Trusted Publisher, and required readbacks completed. It does not mean a tag/OIDC feature release happened.
+
+Other sites must call `chatpypi.client.RegistrationAPIClient` from their backend. Never place service/PyPI/GitHub credentials in browser code. See [Registration API Service](docs/registration-api.en.md) for exact fields, safety, and recovery semantics.
+
 ## Env Configuration
 
 ChatPyPI registers a `pypi` / `chatpypi` config type through `chatenv.configs`, so ChatEnv can discover and manage it after installation:
@@ -138,6 +157,7 @@ ChatPyPI registers a `pypi` / `chatpypi` config type through `chatenv.configs`, 
 chatenv list
 chatenv test -t pypi
 chatenv new -t pypi default
+chatenv new -t chatpypi-api default
 ```
 
 PyPI-related values should live in a ChatEnv profile, shell env, `.env`, or a local profile file.

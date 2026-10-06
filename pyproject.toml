@@ -32,7 +32,26 @@ pypi = "chatpypi.config"
 PyPI = "chatpypi.session_ops:refresh_chatenv_token"
 
 [project.optional-dependencies]
-dev = ["build", "pytest", "twine"]
+api = [
+    "fastapi>=0.110,<1",
+    "pydantic>=2.7,<3",
+    "uvicorn>=0.29,<1",
+    "chatgh>=0.2.12,<0.3.0",
+    "setuptools>=61",
+    "wheel>=0.41,<1",
+]
+dev = [
+    "build",
+    "pytest",
+    "twine",
+    "httpx>=0.27,<1",
+    "fastapi>=0.110,<1",
+    "pydantic>=2.7,<3",
+    "uvicorn>=0.29,<1",
+    "chatgh>=0.2.12,<0.3.0",
+    "setuptools>=61",
+    "wheel>=0.41,<1",
+]
 docs = ["mkdocs>=1.6,<2.0", "mkdocs-material>=9.5,<9.7", "mkdocs-static-i18n>=1.2,<2.0", "mike>=2.0,<3.0"]
 
 [tool.setuptools.dynamic]

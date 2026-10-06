@@ -2277,6 +2277,7 @@ def build_package(
     clean: bool = True,
     sdist: bool = False,
     wheel: bool = False,
+    no_isolation: bool = False,
     runner=run_command,
 ) -> tuple[CommandResult, list[Path]]:
     project_dir = Path(project_dir)
@@ -2289,6 +2290,8 @@ def build_package(
     dist_dir.mkdir(parents=True, exist_ok=True)
 
     args = [sys.executable, "-m", "build", "--outdir", str(dist_dir)]
+    if no_isolation:
+        args.append("--no-isolation")
     if sdist and not wheel:
         args.append("--sdist")
     elif wheel and not sdist:
@@ -2367,6 +2370,7 @@ def upload_distributions(
     repository_url: str | None = None,
     username: str | None = None,
     env: dict[str, str] | None = None,
+    non_interactive: bool = False,
     runner=run_command,
 ) -> tuple[CommandResult, list[Path]]:
     project_dir = Path(project_dir)
@@ -2378,6 +2382,8 @@ def upload_distributions(
         )
 
     args = [sys.executable, "-m", "twine", "upload"]
+    if non_interactive:
+        args.append("--non-interactive")
     if skip_existing:
         args.append("--skip-existing")
     if repository_url:

@@ -1,8 +1,8 @@
 """ChatPyPI package lifecycle helpers.
 
 ChatPyPI provides importable Python APIs for scaffolding, building, checking,
-probing, and uploading Python package distributions. The ``chatpypi`` CLI is a
-thin adapter over these APIs.
+probing, uploading, and registration-only package workflows. The ``chatpypi``
+CLI and optional HTTP service are thin adapters over these APIs.
 """
 
 from .main import (
@@ -21,7 +21,6 @@ from .main import (
     scaffold_package,
     upload_distributions,
 )
-
 __all__ = [
     "__version__",
     "CommandResult",

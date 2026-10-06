@@ -40,6 +40,8 @@ plugins:
             PyPI 发布: PyPI Publishing
             uv / pip 用户下载源: uv / pip User Download Indexes
             发布与 Trusted Publisher Flow: Publishing and Trusted Publisher Flow
+            注册 API 服务: Registration API Service
+            注册服务: Registration Service
             命令与接口: Commands and APIs
             CLI 树: CLI Tree
             Python 接口树: Python Interface Tree
@@ -71,6 +73,8 @@ nav:
   - PyPI 发布:
       - 发布与 Trusted Publisher Flow: pypi-flow.md
       - uv / pip 用户下载源: mirrors.md
+  - 注册服务:
+      - 注册 API 服务: registration-api.md
   - 命令与接口:
       - CLI 树: cli-tree.md
       - Python 接口树: interface-tree.md

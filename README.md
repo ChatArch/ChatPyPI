@@ -95,6 +95,8 @@ chatpypi
 │   └── revoke
 ├── doctor
 │   └── check
+├── paths
+├── serve
 └── docs
     ├── links
     ├── examples
@@ -111,6 +113,8 @@ chatpypi
 - `publisher list` / `publisher detail`：读取账号级和项目级 Trusted Publisher 状态
 - `publisher add-github`：对已存在 PyPI project 直接添加/幂等确认 GitHub active Trusted Publisher，并做读回校验
 - `publisher pending-list` / `pending-add` / `pending-remove`：仅用于真正 pending 的注册/占位前例外流程或清理 stale pending；不是普通 Publisher 默认路径
+- `serve`：启动默认关闭 external writes 的 registration-only HTTP API；所有非 health 路由要求 Bearer auth
+- `paths`：只读显示 ChatArch-owned registration runtime 路径
 - `docs`：输出文档链接与示例命令
 
 登录中新设备触发的邮件确认 checkpoint 已支持显式等待；账号注册、邮箱地址验证、2FA 初始化、token 创建/删除等需要人工验证、二维码或复杂 checkpoint 的流程仍按 checkpoint / browser-assist 边界处理。已存在 PyPI project 的 Publisher 写操作不应 pending：应直接用 `publisher add-github` 完成并读回确认。
@@ -130,6 +134,21 @@ export PYPI_API_TOKEN=...
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
 
+## 注册 API
+
+服务依赖保留在可选 extra 中，基础 CLI 不会强制安装 FastAPI/uvicorn：
+
+```bash
+python -m pip install "ChatPyPI[api]"
+chatenv new -t chatpypi-api default
+chatpypi paths --format json
+chatpypi serve
+```
+
+API 提供 authenticated preflight、不可变 plan、exact confirmation + `Idempotency-Key` job 提交和 job 查询。默认只监听 loopback，registration write gate 默认关闭；public visibility 必须在 plan 中显式选择。终态 `registered` 只代表初始 PyPI package、GitHub source、active Trusted Publisher 和读回检查完成，不代表 tag/OIDC feature release。
+
+其他网站只能从服务端使用 `chatpypi.client.RegistrationAPIClient`；不要把 service/PyPI/GitHub credentials 放进浏览器。完整字段、安全与恢复语义见 [注册 API 服务](docs/registration-api.md)。
+
 ## Env 配置
 
 ChatPyPI 会通过 `chatenv.configs` 注册 `pypi` / `chatpypi` 配置类型，因此安装后可被 ChatEnv 发现和管理：
@@ -138,6 +157,7 @@ ChatPyPI 会通过 `chatenv.configs` 注册 `pypi` / `chatpypi` 配置类型，�
 chatenv list
 chatenv test -t pypi
 chatenv new -t pypi default
+chatenv new -t chatpypi-api default
 ```
 
 当前建议把 PyPI 相关变量显式放到 ChatEnv profile、shell env、`.env` 或 profile 配置里。最小集合分两类：

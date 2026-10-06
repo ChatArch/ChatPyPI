@@ -1,11 +1,14 @@
 from pathlib import Path
 import logging
+import subprocess
+import sys
 
 import chatpypi
 from chatpypi import CommandResult
 from chatpypi import __version__
 from chatpypi.config import (
     PyPIConfig,
+    RegistrationAPIConfig,
     save_active_pypi_env_value,
     save_pypi_env_profile_value,
 )
@@ -24,6 +27,26 @@ def test_public_package_api_exports_core_helpers(tmp_path):
     assert callable(chatpypi.check_distributions)
     assert callable(chatpypi.upload_distributions)
     assert callable(chatpypi.check_repository_conflicts)
+
+
+def test_base_package_import_keeps_registration_and_api_stacks_lazy():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys, chatpypi, chatpypi.cli; "
+                "print(any(name in sys.modules for name in "
+                "('chatpypi.registration', 'chatpypi.api', 'fastapi', 'uvicorn', 'chatgh')))"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False"
 
 
 def test_scaffold_package_importable_api_creates_project(tmp_path):
@@ -80,6 +103,17 @@ def test_chatenv_pypi_config_schema():
     assert fields["PYPI_API_TOKEN"].is_sensitive is True
     assert fields["PYPI_PASSWORD"].is_sensitive is True
     assert fields["PYPI_TOTP_SECRET"].is_sensitive is True
+
+
+def test_chatenv_registration_api_config_schema():
+    assert RegistrationAPIConfig._aliases == ["chatpypi-api", "registration-api"]
+    assert RegistrationAPIConfig._storage_dir == "ChatPyPIAPI"
+    fields = RegistrationAPIConfig.get_fields()
+
+    assert fields["CHATPYPI_API_TOKEN"].is_sensitive is True
+    assert fields["CHATPYPI_API_HOST"].default == "127.0.0.1"
+    assert fields["CHATPYPI_REGISTRATION_ENABLED"].default == "false"
+    assert fields["CHATPYPI_API_ALLOWED_OWNERS"].default == "ChatArch"
 
 
 def test_stable_profile_save_does_not_backfill_process_secrets(monkeypatch, tmp_path):

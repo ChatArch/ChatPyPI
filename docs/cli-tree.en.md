@@ -21,6 +21,8 @@ chatpypi                  # Python package lifecycle and PyPI operation entry
 ├── publisher             # Read or configure Trusted Publisher
 ├── token                 # Planned / checkpoint: PyPI API token management
 ├── doctor                # Local config, session, and safety checks
+├── paths                 # Read ChatArch-owned registration runtime paths
+├── serve                 # Run the secured registration-only HTTP API
 ├── docs                  # Documentation links and example commands
 ├── init                  # Compatibility shortcut: create a src-layout Python package
 ├── build                 # Compatibility shortcut: build wheel / sdist
@@ -59,6 +61,15 @@ chatpypi probe            # Compatibility alias for `chatpypi pkg probe`
 ```
 
 `pkg init -t chatarch` is the core entry for this template update: it generates README, MkDocs, CLI tree, capability map, interface tree, CI/Preview/Deploy workflows, and a ChatEnv provider. The default docs keep structural placeholders only and do not generate plan pages or repository-level domain files.
+
+## Registration API Service
+
+```text
+chatpypi paths [--format text|json]   # Local, read-only state ownership readback
+chatpypi serve [--host HOST] [--port PORT]
+```
+
+`serve` is a thin adapter over `chatpypi.registration.RegistrationManager` and `chatpypi.api.create_app`. FastAPI/uvicorn are imported only when the command runs and are supplied by the `[api]` extra. See [Registration API Service](registration-api.md) for configuration, routes, confirmation/idempotency, and reconciliation semantics.
 
 ## Authentication and Session
 

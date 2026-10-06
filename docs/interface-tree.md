@@ -61,6 +61,34 @@ deadline 对任意第三方 callback 是协作式契约：调用前后会检查�
 
 `resolve_pypi_proxy_url()` 从所选 profile / 环境中读取可选 `PYPI_PROXY_URL`；配置通过 ChatEnv 管理。`login_to_pypi(..., proxy_url=...)` 可显式指定代理。加载 token profile 后，网页管理请求在内存中绑定同一 profile 的传输设置，JSON 序列化不包含此绑定。
 
+`RegistrationAPIConfig` 注册独立 `chatpypi-api` typed schema。service token、bind/Host、owner allowlist、write gate 和资源上限只从 operator 配置读取，不能由 HTTP payload 选择。
+
+## `chatpypi.registration`
+
+```text
+RegistrationManager
+ServiceConfig
+RegistrationError
+DefaultLocalOps
+DefaultProviderBackend
+BoundedRunner
+load_service_config
+normalize_distribution_name
+registration_paths
+```
+
+`RegistrationManager` 是可导入的 registration-only workflow：immutable plan、SQLite job/receipt、单 executor writer、normalized-name exclusion，以及 interrupted/external outcome reconciliation。默认 provider adapter 复用 ChatPyPI scaffold/build/check/upload/session API 和 ChatGH importable API；只有 git/build/test/twine 使用固定 argv subprocess。
+
+## `chatpypi.api` / `chatpypi.client`
+
+```text
+create_app
+RegistrationAPIClient
+RegistrationAPIError
+```
+
+`create_app()` 不启动监听器；`chatpypi serve` 才把它交给 uvicorn。`RegistrationAPIClient` 是无 mutation retry 的服务端 JSON client。最终 HTTP 契约见 [注册 API 服务](registration-api.md)。
+
 ## `chatpypi.cli`
 
 `chatpypi.cli` 负责 Click 参数解析、ChatStyle 交互入口和错误转换。新增实质能力时，优先在 service/API 层实现，再接 CLI。

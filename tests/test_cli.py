@@ -19,6 +19,8 @@ def test_help_lists_pypi_commands():
     assert "token" in result.output
     assert "doctor" in result.output
     assert "docs" in result.output
+    assert "paths" in result.output
+    assert "serve" in result.output
     assert "init" in result.output
     assert "build" in result.output
     assert "check" in result.output
@@ -49,9 +51,12 @@ def test_tree_options_print_registered_pypi_cli_tree():
     assert "mirror  # Manage current-user uv and pip download indexes." in full.output
     assert "show [--tool TOOL] [--format OUTPUT-FORMAT]" in full.output
     assert "set [PRESET] [--tool TOOL]" in full.output
+    assert "paths [--format OUTPUT-FORMAT]" in full.output
+    assert "serve [--host HOST] [--port PORT]" in full.output
     assert brief.output.startswith("chatpypi\n")
     assert "init  # Scaffold a minimal src-layout Python package." in brief.output
     assert "publisher  # Read or manage current-account publisher views." in brief.output
+    assert "serve  # Serve the secured registration-only HTTP API." in brief.output
     assert "init [NAME]" not in brief.output
     assert "[--template TEMPLATE]" not in brief.output
 

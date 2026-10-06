@@ -10,6 +10,7 @@ ChatPyPI is ChatArch's Python package lifecycle and PyPI automation CLI. It cove
 | Create a ChatArch Python package template with MkDocs, i18n, and Actions | [ChatArch Template and Docs Flow](template-flow.md) | Implemented; this PR updates the template contract |
 | Build, check, upload Python packages, or configure Trusted Publishers | [Publishing and Trusted Publisher Flow](pypi-flow.md) | Partially implemented; some flows remain human-checkpointed |
 | Persist current-user uv / pip download indexes | [uv / pip User Download Indexes](mirrors.md) | Implemented with official/Tsinghua presets and dry-run |
+| Call package registration safely from another site's backend | [Registration API Service](registration-api.md) | Registration-only API/client implemented; production enablement remains operator-controlled |
 | Review Python interfaces behind commands | [Python Interface Tree](interface-tree.md) | Documented |
 
 ## Primary Entry Points
@@ -40,6 +41,12 @@ ChatPyPI is ChatArch's Python package lifecycle and PyPI automation CLI. It cove
 
     [Open Interface Tree](interface-tree.md)
 
+- **Registration API**
+
+    Review backend integration, immutable plans, asynchronous jobs, and reconciliation boundaries.
+
+    [Open Registration API](registration-api.md)
+
 </div>
 
 ## Document Organization
@@ -66,4 +73,6 @@ chatpypi pkg --help
 chatpypi auth --help
 chatpypi publisher --help
 chatpypi mirror show
+chatpypi paths --format json
+chatpypi serve --help
 ```

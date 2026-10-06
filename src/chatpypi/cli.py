@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from dataclasses import replace
 
 import click
 from click.core import ParameterSource
@@ -256,6 +257,83 @@ def doctor():
 def docs():
     """Show documentation links and usage examples."""
     pass
+
+
+@cli.command(name="serve")
+@click.option(
+    "--host",
+    default=None,
+    help="Operator-only listen host override; defaults to typed ChatEnv config.",
+)
+@click.option(
+    "--port",
+    type=click.IntRange(1, 65535),
+    default=None,
+    help="Operator-only listen port override; defaults to typed ChatEnv config.",
+)
+def serve(host: str | None, port: int | None):
+    """Serve the secured registration-only HTTP API."""
+
+    try:
+        from chatpypi.registration import (
+            RegistrationError,
+            load_service_config,
+            validate_service_config,
+        )
+
+        service_config = load_service_config()
+        if host is not None or port is not None:
+            service_config = validate_service_config(
+                replace(
+                    service_config,
+                    host=host or service_config.host,
+                    port=port or service_config.port,
+                )
+            )
+        from chatpypi.api import create_app
+        import uvicorn
+        app = create_app(config=service_config)
+    except ImportError as exc:
+        raise click.ClickException(
+            "API dependencies are unavailable; install ChatPyPI with the [api] extra."
+        ) from exc
+    except RegistrationError as exc:
+        raise click.ClickException(exc.safe_message) from None
+    except Exception:
+        raise click.ClickException(
+            "Registration state could not be initialized safely."
+        ) from None
+
+    uvicorn.run(
+        app,
+        host=service_config.host,
+        port=service_config.port,
+        workers=1,
+        access_log=False,
+        proxy_headers=False,
+        server_header=False,
+    )
+
+
+@cli.command(name="paths")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+)
+def paths(output_format: str):
+    """Show ChatArch-owned registration runtime paths."""
+
+    from chatpypi.registration import registration_paths
+
+    payload = registration_paths()
+    if output_format == "json":
+        _echo_json(payload)
+        return
+    click.echo(f"chatarch_home={payload['chatarch_home']}")
+    click.echo(f"registration_state={payload['registration_state']}")
 
 
 def _resolve_secret_env_var(
@@ -1552,6 +1630,9 @@ _planned_group_leaf(token, "revoke", "Planned to revoke a PyPI API token with co
 def docs_links():
     """Show the most relevant documentation entry points."""
     click.echo("ChatPyPI docs: https://arch.gh.wzhecnu.cn/ChatPyPI/")
+    click.echo(
+        "Registration API: https://arch.gh.wzhecnu.cn/ChatPyPI/registration-api/"
+    )
     click.echo("PyPI user docs: https://docs.pypi.org/")
     click.echo("Trusted publishing guide: https://docs.pypi.org/trusted-publishers/")
 
@@ -1566,6 +1647,7 @@ def docs_examples():
         "chatpypi pkg upload --project-dir ./chatpypi-demo --token-env PYPI_API_TOKEN"
     )
     click.echo("chatpypi auth session show")
+    click.echo("chatpypi paths --format json")
 
 
 @docs.command(name="open")
@@ -1577,6 +1659,7 @@ def docs_open(topic: str | None):
         "pypi": "https://docs.pypi.org/",
         "trusted-publishing": "https://docs.pypi.org/trusted-publishers/",
         "api-tokens": "https://docs.pypi.org/api/tokens/",
+        "registration-api": "https://arch.gh.wzhecnu.cn/ChatPyPI/registration-api/",
     }
     target = routes.get(_normalize_optional_text(topic), routes[None])
     click.echo(target)
@@ -1600,6 +1683,8 @@ KNOWN_COMMANDS = {
     "token",
     "doctor",
     "docs",
+    "serve",
+    "paths",
     "init",
     "build",
     "check",

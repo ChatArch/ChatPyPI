@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### 新增
+
+- 新增 `chatpypi serve`、`chatpypi paths`、importable FastAPI app factory、registration-only workflow 和无 mutation retry 的服务端 HTTP client；serving/ChatGH 依赖保留在 `[api]` extra。
+- 新增 authenticated preflight、immutable plan、exact confirmation + `Idempotency-Key` 异步 job，以及有界 list/detail/schema 路由。
+- 新增 typed `chatpypi-api` ChatEnv 配置，覆盖 loopback bind、trusted Host、owner allowlist、默认关闭的 registration write gate 和资源上限。
+
+### 安全与恢复
+
+- registration state 固定存放在 ChatArch home 私有 runtime 目录；目录/workspace 0700、SQLite/lock 0600，并拒绝 symlink escape。
+- 使用跨进程 lock 和单 executor writer、normalized-name exclusion；重启时把 interrupted job 转为 `reconciliation_required`，不自动重放 external mutation。
+- 注册顺序强制 PyPI 初始 upload/readback 先于 GitHub repo，随后初始 source push、active exact Trusted Publisher 和 visibility/default-branch/protection readback；缺认证为 blocked，不确定 external write 为 reconciliation required。
+- API 禁用 Swagger/ReDoc/default OpenAPI URL 和 CORS，限制 Host/body/rate/queue，拒绝未知及路径/command/credential 类请求字段，并只持久化固定错误和白名单 receipts。
+
+### 范围
+
+- registration job 的完成状态为 `registered`；tag、version bump、OIDC feature release、Pages、消费方源码修改和生产服务切换仍明确不在本次自动化范围。
+
 ## 0.2.13
 
 ### 新增

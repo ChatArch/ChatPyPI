@@ -11,6 +11,9 @@ def test_ci_workflow_smokes_shared_tree_options():
     assert "python -m chatpypi.cli --version" in workflow
     assert "python -m chatpypi.cli --tree" in workflow
     assert "python -m chatpypi.cli --tree-brief" in workflow
+    assert 'python -m pip install -e ".[api,dev,docs]"' in workflow
+    assert "python -m chatpypi.cli serve --help" in workflow
+    assert "python -m chatpypi.cli paths --format json" in workflow
 
 
 def test_publish_workflow_is_tag_only_and_main_guarded():
