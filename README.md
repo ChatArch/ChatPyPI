@@ -130,6 +130,12 @@ export PYPI_API_TOKEN=...
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
 
+## 工具服务（核心检查点）
+
+安装 `ChatPyPI[service]` 后，可用 `chatpypi serve` 启动 REST 与 Streamable HTTP MCP，或用 `chatpypi serve --transport stdio` 启动 MCP stdio。`--mode service --base-url URL` 只远程派发声明为服务端能力的命令；脚手架、构建、检查与镜像配置始终留在本地。REST 路由与 MCP schema 从同一组已实现 Click callback 生成。回环地址可选择不启用鉴权；非回环绑定必须验证 ChatAuth RS256/JWKS access token，并由服务端维护调用方到 PyPI profile 的绑定。ChatPyPI 不签发或远程刷新 ChatAuth token。
+
+本检查点尚未包含上传；service mode 不会发送项目目录或源码树。
+
 ## Env 配置
 
 ChatPyPI 会通过 `chatenv.configs` 注册 `pypi` / `chatpypi` 配置类型，因此安装后可被 ChatEnv 发现和管理：

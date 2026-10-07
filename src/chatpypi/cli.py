@@ -11,7 +11,7 @@ import click
 from click.core import ParameterSource
 
 from chatpypi import __version__
-from chatpypi.config import load_pypi_env_profile, resolve_pypi_proxy_url
+from chatpypi.config import load_pypi_env_profile, resolve_pypi_proxy_url, resolve_service_settings
 from chatpypi.session_ops import (
     LEGACY_SESSION_TOKEN_ENV,
     PyPISessionError,
@@ -184,12 +184,74 @@ def _resolve_project_and_dist_dirs(
     return resolved_project_dir, resolved_dist_dir
 
 
-@click.group(name="chatpypi", invoke_without_command=True, no_args_is_help=True)
+class ServiceGroup(click.Group):
+    """Dispatch server-capable leaves after root parsing and before callbacks."""
+
+    def invoke(self, ctx: click.Context):
+        try:
+            mode, base_url, auth_profile = resolve_service_settings(
+                mode=ctx.params.get("mode"),
+                base_url=ctx.params.get("base_url"),
+                auth_profile=ctx.params.get("auth_profile"),
+            )
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        if mode == "service":
+            from chatpypi.tool_service import parse_remote_invocation
+
+            remaining = [*ctx._protected_args, *ctx.args]
+            spec, arguments = parse_remote_invocation(self, remaining)
+            if spec is not None and spec.policy == "server":
+                from chatpypi.service_client import call_remote_tool, validate_base_url
+
+                try:
+                    valid_url = validate_base_url(base_url)
+                    result = call_remote_tool(
+                        base_url=valid_url,
+                        spec=spec,
+                        arguments=arguments,
+                        auth_profile=auth_profile,
+                        token_env=ctx.params["access_token_env"],
+                    )
+                except ValueError as exc:
+                    raise click.ClickException(str(exc)) from exc
+                if result.get("stdout"):
+                    click.echo(str(result["stdout"]), nl=False)
+                if result.get("stderr"):
+                    click.echo(str(result["stderr"]), err=True, nl=False)
+                ctx.exit(int(result["exit_code"]))
+        return super().invoke(ctx)
+
+
+@click.group(name="chatpypi", cls=ServiceGroup, invoke_without_command=True, no_args_is_help=True)
 @click.version_option(__version__, prog_name="chatpypi")
 @add_tree_option(renderer_options={"root_name": "chatpypi"})
-def cli():
+@click.option("--mode", type=click.Choice(["local", "service"]), default=None, help="Execute locally or dispatch server-capable commands to the tool service.")
+@click.option("--base-url", default=None, help="ChatPyPI tool service base URL.")
+@click.option("--auth-profile", default=None, help="ChatAuth TokenStore profile for service calls.")
+@click.option(
+    "--access-token-env",
+    default="CHATPYPI_ACCESS_TOKEN",
+    show_default=True,
+    help="Optional bootstrap environment variable containing a ChatAuth access token.",
+)
+@click.pass_context
+def cli(
+    ctx: click.Context,
+    mode: str | None,
+    base_url: str | None,
+    auth_profile: str | None,
+    access_token_env: str,
+):
     """Python package lifecycle and PyPI operations helpers."""
-    pass
+    try:
+        resolved_mode, resolved_url, resolved_profile = resolve_service_settings(
+            mode=mode, base_url=base_url, auth_profile=auth_profile
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    ctx.ensure_object(dict)
+    ctx.obj.update(mode=resolved_mode, base_url=resolved_url, auth_profile=resolved_profile)
 
 
 @cli.group(name="pkg")
@@ -867,15 +929,13 @@ def probe(
     package_name: str | None,
 ):
     """Check whether an exact package name is available on PyPI."""
-    project_dir = _resolve_project_dir(project_dir)
-    try:
-        metadata = read_project_metadata(project_dir)
-    except PyPICommandError:
-        metadata = None
-
-    target_name = _normalize_optional_text(package_name) or (
-        metadata.name if metadata else None
-    )
+    target_name = _normalize_optional_text(package_name)
+    if not target_name:
+        project_dir = _resolve_project_dir(project_dir)
+        try:
+            target_name = read_project_metadata(project_dir).name
+        except PyPICommandError:
+            target_name = None
     if not target_name:
         raise click.ClickException(
             "Package name is required. Pass NAME or provide a readable pyproject.toml."
@@ -1582,6 +1642,88 @@ def docs_open(topic: str | None):
     click.echo(target)
 
 
+@cli.command(name="serve")
+@click.option("--transport", type=click.Choice(["http", "stdio"]), default="http", show_default=True)
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--allowed-host", multiple=True, help="Trusted client-facing hostname, distinct from the bind address. Repeat as needed.")
+@click.option("--port", type=click.IntRange(1, 65535), default=8765, show_default=True)
+@click.option("--auth-issuer", envvar="CHATPYPI_AUTH_ISSUER", default=None)
+@click.option("--auth-audience", envvar="CHATPYPI_AUTH_AUDIENCE", default=None)
+@click.option("--jwks-url", envvar="CHATPYPI_AUTH_JWKS_URL", default=None)
+@click.option("--required-scope", envvar="CHATPYPI_AUTH_SCOPE", default=None, help="Required scope; ChatEnv default or chatpypi:invoke.")
+@click.option(
+    "--profile-binding",
+    multiple=True,
+    metavar="SUBJECT_OR_CLIENT=PYPI_PROFILE",
+    help="Server-owned authenticated caller to PyPI profile binding.",
+)
+def serve(
+    transport: str,
+    host: str,
+    allowed_host: tuple[str, ...],
+    port: int,
+    auth_issuer: str | None,
+    auth_audience: str | None,
+    jwks_url: str | None,
+    required_scope: str,
+    profile_binding: tuple[str, ...],
+):
+    """Serve the generated REST and MCP tool interfaces."""
+    try:
+        from chatpypi.service import create_app, create_mcp_server
+    except ImportError as exc:
+        raise click.ClickException("Install ChatPyPI[service] to serve HTTP or MCP.") from exc
+
+    from chatpypi.config import load_active_pypi_env
+
+    active = load_active_pypi_env()
+    auth_issuer = auth_issuer or active.get("CHATPYPI_AUTH_ISSUER") or None
+    auth_audience = auth_audience or active.get("CHATPYPI_AUTH_AUDIENCE") or None
+    jwks_url = jwks_url or active.get("CHATPYPI_AUTH_JWKS_URL") or None
+    required_scope = required_scope or active.get("CHATPYPI_AUTH_SCOPE") or "chatpypi:invoke"
+
+    bindings: dict[str, str] = {}
+    for item in profile_binding:
+        subject, separator, profile_name = item.partition("=")
+        if not separator or not subject.strip() or not profile_name.strip():
+            raise click.ClickException("--profile-binding must be SUBJECT_OR_CLIENT=PYPI_PROFILE")
+        bindings[subject.strip()] = profile_name.strip()
+    auth_values = (auth_issuer, auth_audience, jwks_url)
+    if any(auth_values) and not all(auth_values):
+        raise click.ClickException("--auth-issuer, --auth-audience, and --jwks-url must be set together.")
+    verifier = None
+    if all(auth_values):
+        from chatpypi.service_auth import JWTResourceVerifier
+
+        verifier = JWTResourceVerifier(
+            issuer=str(auth_issuer),
+            audience=str(auth_audience),
+            jwks_url=str(jwks_url),
+            required_scope=required_scope,
+        )
+        if not bindings:
+            raise click.ClickException("Authenticated service mode requires at least one --profile-binding.")
+    if transport == "stdio":
+        profiles = set(bindings.values())
+        if len(profiles) != 1:
+            raise click.ClickException("MCP stdio requires exactly one server-bound PyPI profile.")
+        create_mcp_server(bound_profile=profiles.pop()).run(transport="stdio")
+        return
+    if verifier is None:
+        raise click.ClickException("HTTP service startup requires ChatAuth issuer, audience, and JWKS configuration.")
+    try:
+        import uvicorn
+    except ImportError as exc:
+        raise click.ClickException("Install ChatPyPI[service] to run the HTTP service.") from exc
+    app = create_app(
+        token_verifier=verifier,
+        profile_bindings=bindings,
+        required_scope=required_scope,
+        allowed_hosts=list(allowed_host) or ([host] if host not in {"0.0.0.0", "::"} else ["localhost", "127.0.0.1", "[::1]"]),
+    )
+    uvicorn.run(app, host=host, port=port)
+
+
 pkg.add_command(init)
 pkg.add_command(build)
 pkg.add_command(check)
@@ -1605,6 +1747,7 @@ KNOWN_COMMANDS = {
     "check",
     "upload",
     "probe",
+    "serve",
     "--tree",
     "--tree-brief",
     "--help",

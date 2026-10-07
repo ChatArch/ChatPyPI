@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Add a core local/service execution mode, a Click-derived tool catalog, bounded REST routes, and matching MCP tools for the implemented server-capable CLI surface.
+- Add optional ChatAuth RS256/JWKS resource-token verification with server-owned caller-to-PyPI-profile bindings; ChatPyPI does not issue or refresh ChatAuth credentials.
+
+### Security
+
+- Keep scaffold/build/check/mirror local by policy, reject invalid service URLs before credential lookup, disable redirects and retries for service calls, and never accept a caller-selected PyPI credential profile.
+
 ## 0.2.13
 
 ### 新增

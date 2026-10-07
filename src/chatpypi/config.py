@@ -29,6 +29,29 @@ class PyPIConfig(BaseEnvConfig):
         print("Schema loaded; no network test is required.")
 
 
+def resolve_service_settings(
+    *,
+    mode: str | None = None,
+    base_url: str | None = None,
+    auth_profile: str | None = None,
+    home: str | Path | None = None,
+) -> tuple[str, str | None, str]:
+    """Resolve explicit values, then process env, then active ChatEnv values."""
+
+    active = load_active_pypi_env(home)
+    resolved_mode = mode or os.getenv("CHATPYPI_MODE") or active.get("CHATPYPI_MODE") or "local"
+    resolved_url = base_url or os.getenv("CHATPYPI_BASE_URL") or active.get("CHATPYPI_BASE_URL") or None
+    resolved_profile = (
+        auth_profile
+        or os.getenv("CHATPYPI_AUTH_PROFILE")
+        or active.get("CHATPYPI_AUTH_PROFILE")
+        or "default"
+    )
+    if resolved_mode not in {"local", "service"}:
+        raise ValueError("CHATPYPI_MODE must be local or service.")
+    return resolved_mode, resolved_url, resolved_profile
+
+
 def load_active_pypi_env(home: str | Path | None = None) -> dict[str, str]:
     """Load active PyPI typed env values from ChatEnv/ChatArch home."""
 
@@ -155,9 +178,45 @@ setattr(
     "PYPI_PROXY_URL",
     EnvField("PYPI_PROXY_URL", desc="Proxy for PyPI web login and management only", is_sensitive=True),
 )
+setattr(
+    PyPIConfig,
+    "CHATPYPI_MODE",
+    EnvField("CHATPYPI_MODE", default="local", desc="Execution mode: local or service"),
+)
+setattr(
+    PyPIConfig,
+    "CHATPYPI_BASE_URL",
+    EnvField("CHATPYPI_BASE_URL", desc="ChatPyPI tool service base URL"),
+)
+setattr(
+    PyPIConfig,
+    "CHATPYPI_AUTH_PROFILE",
+    EnvField("CHATPYPI_AUTH_PROFILE", default="default", desc="ChatAuth token profile for service calls"),
+)
+setattr(
+    PyPIConfig,
+    "CHATPYPI_AUTH_ISSUER",
+    EnvField("CHATPYPI_AUTH_ISSUER", desc="Trusted ChatAuth JWT issuer"),
+)
+setattr(
+    PyPIConfig,
+    "CHATPYPI_AUTH_AUDIENCE",
+    EnvField("CHATPYPI_AUTH_AUDIENCE", desc="ChatPyPI resource audience"),
+)
+setattr(
+    PyPIConfig,
+    "CHATPYPI_AUTH_JWKS_URL",
+    EnvField("CHATPYPI_AUTH_JWKS_URL", desc="Trusted ChatAuth JWKS URL"),
+)
+setattr(
+    PyPIConfig,
+    "CHATPYPI_AUTH_SCOPE",
+    EnvField("CHATPYPI_AUTH_SCOPE", default="chatpypi:invoke", desc="Required service access scope"),
+)
 
 __all__ = [
     "resolve_pypi_proxy_url",
+    "resolve_service_settings",
     "PyPIConfig",
     "load_active_pypi_env",
     "load_pypi_env_profile",

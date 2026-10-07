@@ -12,6 +12,8 @@ chatpypi                  # Python package lifecycle and PyPI operation entry
 ├── --version             # Print the package version
 ├── --tree                # Print the registered CLI tree with parameter signatures
 ├── --tree-brief          # Print command nodes and descriptions without signatures
+├── --mode local|service  # Override the ChatEnv default execution mode
+├── serve                 # Serve REST/MCP tool interfaces
 ├── pkg                   # Package scaffold, build, check, upload, and probe
 ├── auth                  # Session, account, and human-checkpoint flows
 ├── profile               # Planned: local ChatPyPI profile management
