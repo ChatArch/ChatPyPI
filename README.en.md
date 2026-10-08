@@ -130,6 +130,12 @@ export PYPI_API_TOKEN=...
 chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 ```
 
+## Tool Service (core checkpoint)
+
+Install `ChatPyPI[service]`, then use `chatpypi serve` for REST plus Streamable HTTP MCP, or `chatpypi serve --transport stdio` for MCP stdio. `--mode service --base-url URL` remotely dispatches declared server-capable commands; scaffold, build, check, and mirror commands always remain local. REST routes and MCP schemas come from the same implemented Click callbacks. ChatAuth RS256/JWKS verification is optional on loopback and mandatory for non-loopback binding; authenticated callers use server-owned PyPI profile bindings. ChatPyPI does not issue or remotely refresh ChatAuth tokens.
+
+Upload is not part of this checkpoint: service mode never sends a project directory or source tree.
+
 ## Env Configuration
 
 ChatPyPI registers a `pypi` / `chatpypi` config type through `chatenv.configs`, so ChatEnv can discover and manage it after installation:

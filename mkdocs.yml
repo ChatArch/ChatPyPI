@@ -43,6 +43,7 @@ plugins:
             命令与接口: Commands and APIs
             CLI 树: CLI Tree
             Python 接口树: Python Interface Tree
+            本地与服务模式: Local and Service Modes
 markdown_extensions:
   - admonition
   - attr_list
@@ -74,3 +75,4 @@ nav:
   - 命令与接口:
       - CLI 树: cli-tree.md
       - Python 接口树: interface-tree.md
+      - 本地与服务模式: tool-service.md

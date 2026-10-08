@@ -12,6 +12,8 @@ chatpypi                  # Python 包生命周期与 PyPI 操作入口
 ├── --version             # 输出当前包版本
 ├── --tree                # 输出带参数签名的真实已注册 CLI 树
 ├── --tree-brief          # 输出命令节点和描述，不含参数签名
+├── --mode local|service  # 显式覆盖 ChatEnv 默认执行模式
+├── serve                 # 启动 REST/MCP 工具服务
 ├── pkg                   # 包模板、构建、校验、上传和探测
 ├── auth                  # 登录态、账号和人工 checkpoint 流程
 ├── profile               # 规划：本地 ChatPyPI profile 管理
