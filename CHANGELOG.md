@@ -1,15 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.2.14 - 2026-10-08
 
-### Added
+### 新增
 
-- Add a core local/service execution mode, a Click-derived tool catalog, bounded REST routes, and matching MCP tools for the implemented server-capable CLI surface.
-- Add optional ChatAuth RS256/JWKS resource-token verification with server-owned caller-to-PyPI-profile bindings; ChatPyPI does not issue or refresh ChatAuth credentials.
+- 同一 CLI 支持 `--mode local|service`，ChatEnv 管理默认模式、服务地址和 ChatAuth token profile。
+- 从已实现命令派生 13 个服务工具，提供 REST 查询/调用和 MCP StreamableHTTP/stdio；不包含占位命令、jobs、plans 或注册平台。
+- `chatpypi serve` 启动鉴权工具服务；Python 可复用 app/server factory 与工具执行接口。
 
-### Security
+### 安全与边界
 
-- Keep scaffold/build/check/mirror local by policy, reject invalid service URLs before credential lookup, disable redirects and retries for service calls, and never accept a caller-selected PyPI credential profile.
+- RS256/JWKS 校验 issuer、audience、时间和 scope，按服务端 subject/client 绑定 PyPI profile；JWKS 读取通过线程 API 执行，不阻塞异步事件循环。
+- 创建、构建、检查和本机配置保留本地；上传仅传受限 wheel/sdist，验证文件名/大小/摘要并清理临时产物，不接收客户端凭据、任意服务端路径或自定义上传地址。
+- 显式可信 Host、鉴权目录、请求大小限制、安全错误与无重定向/写重试；远程失败不回退本地。
+- ChatPyPI 不签发 ChatAuth token，也不实现远程自动 refresh；继续由授权服务维护令牌生命周期。
 
 ## 0.2.13
 

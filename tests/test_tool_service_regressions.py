@@ -77,3 +77,24 @@ def test_all_interface_bind_accepts_explicit_trusted_host(monkeypatch):
     assert result.exit_code == 0, result.output
     assert "tools.example.test" in captured["allowed_hosts"]
     assert "0.0.0.0" not in captured["allowed_hosts"]
+
+
+def test_jwks_provider_does_not_block_event_loop():
+    import asyncio
+    import threading
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from chatpypi.service_auth import JWTResourceVerifier
+
+    seen = []
+    def provider():
+        seen.append(threading.get_ident())
+        return {"keys": []}
+    verifier = JWTResourceVerifier(issuer="https://auth.example.test", audience="tools", jwks_provider=provider)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = jwt.encode({}, key, algorithm="RS256", headers={"kid": "missing"})
+    async def check():
+        event_loop_thread = threading.get_ident()
+        assert await verifier.verify_token(token) is None
+        assert seen and seen[0] != event_loop_thread
+    asyncio.run(check())

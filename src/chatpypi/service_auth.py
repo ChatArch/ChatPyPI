@@ -7,6 +7,7 @@ from typing import Any, Callable
 from urllib.parse import urlsplit
 
 import httpx
+import anyio
 import jwt
 from mcp.server.auth.provider import AccessToken
 
@@ -75,7 +76,8 @@ class JWTResourceVerifier:
             header = jwt.get_unverified_header(token)
             if header.get("alg") != "RS256" or not header.get("kid"):
                 return None
-            keys = self._jwks().get("keys", [])
+            jwks = await anyio.to_thread.run_sync(self._jwks)
+            keys = jwks.get("keys", [])
             jwk = next(item for item in keys if item.get("kid") == header["kid"])
             key = jwt.PyJWK.from_dict(jwk).key
             claims = jwt.decode(

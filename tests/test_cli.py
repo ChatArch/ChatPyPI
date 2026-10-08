@@ -60,7 +60,7 @@ def test_version_option_reports_package_version():
     result = CliRunner().invoke(cli, ["--version"])
 
     assert result.exit_code == 0
-    assert "chatpypi, version 0.2.13" in result.output
+    assert "chatpypi, version 0.2.14" in result.output
 
 
 def test_publisher_help_lists_direct_active_commands():
