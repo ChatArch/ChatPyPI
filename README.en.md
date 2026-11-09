@@ -199,12 +199,13 @@ Automation can call `chatpypi.session_ops.login_to_pypi(..., confirmation_provid
 
 ## CLI Contract
 
-This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0`. New commands should prefer:
+This template depends on `chatstyle>=0.2.1,<0.3.0` and `chatenv>=0.2.11,<0.3.0`. New commands should prefer:
 
 - `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` to render registered Click metadata.
-- `CommandSchema` / `CommandField` for inputs.
+- `CommandSchema` / `CommandField` for inputs, with `param_type` reusing Click range, choice and path validation.
 - `add_interactive_option()` for the shared `-i/-I` switch.
 - `resolve_command_inputs()` for missing args, defaults, TTY behavior, and validation.
+- `chatpypi init -t chatarch` generates an optional `examples/interactive_input.py` and a test of that example alone. Opt in only for commands with recoverable input; `-I` disables prompts but does not mean dry run.
 - `chatpypi init -t chatarch` generates `config.py` and a `chatenv.configs` entry point by default; pass `--without-chatenv-provider` only when the package should not be ChatEnv-discoverable.
 
 ## Layout
