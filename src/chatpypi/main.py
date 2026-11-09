@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import importlib
 import json
+import keyword
 import importlib.util
 import logging
 from pathlib import Path
@@ -245,6 +246,8 @@ def normalize_module_name(package_name: str) -> str:
         )
     if module_name[0].isdigit():
         raise PyPICommandError("Module name cannot start with a digit.")
+    if keyword.iskeyword(module_name):
+        raise PyPICommandError("Module name cannot be a Python keyword.")
     return module_name
 
 
@@ -371,7 +374,7 @@ def _build_chatarch_pyproject_content(
         'readme = "README.md"',
         f'requires-python = "{_toml_escape(requires_python)}"',
         f'license = "{_toml_escape(license_name)}"',
-        'dependencies = ["click>=8.0", "chatstyle>=0.2.0,<0.3.0", "chatenv>=0.2.11,<0.3.0"]',
+        'dependencies = ["click>=8.0", "chatstyle>=0.2.1,<0.3.0", "chatenv>=0.2.11,<0.3.0"]',
     ]
     if author and email:
         lines.append(
@@ -627,12 +630,13 @@ python -m build
 
 ## 命令行规范
 
-这个模板默认依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.11,<0.3.0`，新增命令应优先使用：
+这个模板默认依赖 `chatstyle>=0.2.1,<0.3.0` 和 `chatenv>=0.2.11,<0.3.0`，新增命令应优先使用：
 
 - `add_tree_option()` 提供共享的 `--tree` / `--tree-brief`，`render_click_tree()` 从已注册 Click 元数据生成命令树。
-- `CommandSchema` / `CommandField` 描述输入。
+- `CommandSchema` / `CommandField` 描述输入，`param_type`可复用Click的范围、选择和路径校验。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
+- `examples/interactive_input.py` 是可运行的**可选**接入示例；只在业务命令需要补参时复用，不强制全部命令交互。`-I` 不是 dry-run。
 - 默认生成 `config.py` 和 `chatenv.configs` 入口点，使包可被 ChatEnv 发现；只有明确不需要 ChatEnv 接入时才使用 `--without-chatenv-provider`。
 
 ## 目录结构
@@ -702,12 +706,13 @@ python -m build
 
 ## CLI Contract
 
-This template depends on `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0`. New commands should prefer:
+This template depends on `chatstyle>=0.2.1,<0.3.0` and `chatenv>=0.2.11,<0.3.0`. New commands should prefer:
 
 - `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` to render registered Click metadata.
-- `CommandSchema` / `CommandField` for inputs.
+- `CommandSchema` / `CommandField` for inputs, with `param_type` reusing Click range, choice and path validation.
 - `add_interactive_option()` for the shared `-i/-I` switch.
 - `resolve_command_inputs()` for missing args, defaults, TTY behavior, and validation.
+- `examples/interactive_input.py` is an executable **opt-in** recipe. Not all commands need prompts; `-I` suppresses prompts but is not a dry run.
 - Generate `config.py` and a `chatenv.configs` entry point by default so the package is ChatEnv-discoverable; use `--without-chatenv-provider` only when ChatEnv integration is intentionally not needed.
 
 ## Layout
@@ -728,11 +733,13 @@ def _build_chatarch_develop_md() -> str:
 
             ## CLI Rules
 
-            - Use `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0` as the canonical CLI interaction runtime.
+            - Use `chatstyle>=0.2.1,<0.3.0` and `chatenv>=0.2.11,<0.3.0` as the canonical CLI interaction runtime.
             - Use `add_tree_option()` for shared `--tree` / `--tree-brief` flags and `render_click_tree()` for programmatic Click-tree readback.
             - Prefer `CommandSchema`, `CommandField`, `add_interactive_option()`, and `resolve_command_inputs()` for new commands.
-            - Missing required args should auto-enter interactive mode when recoverable.
-            - `-i` forces interactive mode; `-I` disables prompting and must fail fast.
+            - In commands opting into ChatStyle input resolution, missing recoverable args can auto-prompt on a TTY.
+            - `-i` forces prompting; `-I` disables prompting and fails fast only when required input is missing.
+            - `examples/interactive_input.py` is an optional runnable recipe for recoverable inputs; do not add prompts to unrelated commands.
+            - `-I` only disables prompts; use a separate `--dry-run` for preview-only behavior.
             - Prompt defaults must match actual execution defaults.
             - Sensitive values must stay masked in prompts and summaries.
             - Prefer lazy imports in CLI wiring and keep implementation imports local when possible.
@@ -837,6 +844,95 @@ def _build_chatarch_test_cli_py(module_name: str) -> str:
             """
         ).strip()
         + "\n"
+    )
+
+
+def _build_chatarch_interactive_example_py() -> str:
+    return textwrap.dedent(
+        """\
+        '''Opt-in ChatStyle example; not registered with the package CLI.'''
+
+        import click
+        from chatstyle import CommandField, CommandSchema, add_interactive_option, resolve_command_inputs
+
+        COUNT = click.IntRange(1, 10)
+
+        @click.command()
+        @click.argument("resource", required=False)
+        @click.option("--count", type=COUNT, default=None)
+        @add_interactive_option
+        def example(resource: str | None, count: int | None, interactive: bool | None) -> None:
+            '''Resolve a recoverable argument before calling your real operation.'''
+            values = resolve_command_inputs(
+                schema=CommandSchema("example", (
+                    CommandField("resource", "Resource", required=True),
+                    CommandField("count", "Count", default=1, param_type=COUNT, prompt_if_missing=interactive is True),
+                )),
+                provided={"resource": resource, "count": count},
+                interactive=interactive,
+                usage="Usage: example [RESOURCE] [--count INTEGER] [-i|-I]",
+            )
+            # Replace this readback with your domain function when you opt in.
+            for _ in range(values["count"]):
+                click.echo(values["resource"])
+
+
+        if __name__ == "__main__":
+            example()
+        """
+    )
+
+
+def _build_chatarch_test_interactive_example_py() -> str:
+    return textwrap.dedent(
+        """\
+        '''Exercise the optional recipe, not future business commands.'''
+
+        import runpy
+        from pathlib import Path
+
+        from click.testing import CliRunner
+        import chatstyle.core.interactive as interactive_core
+
+
+        def _example():
+            path = Path(__file__).resolve().parents[1] / "examples" / "interactive_input.py"
+            return runpy.run_path(str(path))["example"]
+
+
+        def test_complete_no_prompt_args_execute_normally():
+            result = CliRunner().invoke(_example(), ["demo", "-I"])
+            assert result.exit_code == 0, result.output
+            assert result.output.strip() == "demo"
+
+
+        def test_missing_no_prompt_args_fail_fast():
+            result = CliRunner().invoke(_example(), ["-I"])
+            assert result.exit_code != 0
+            assert "Missing required value: resource" in result.output
+
+
+        def test_forced_prompt_needs_tty(monkeypatch):
+            monkeypatch.setattr(interactive_core, "is_interactive_available", lambda: False)
+            result = CliRunner().invoke(_example(), ["-i"])
+            assert result.exit_code != 0
+            assert "no TTY" in result.output
+
+
+        def test_missing_arg_can_auto_prompt_on_tty(monkeypatch):
+            monkeypatch.setattr(interactive_core, "is_interactive_available", lambda: True)
+            result = CliRunner().invoke(_example(), [], input="demo\\n")
+            assert result.exit_code == 0, result.output
+            assert "Resource" in result.output
+            assert result.output.strip().endswith("demo")
+
+
+        def test_auto_prompt_env_toggle(monkeypatch):
+            monkeypatch.setattr(interactive_core, "is_interactive_available", lambda: True)
+            result = CliRunner().invoke(_example(), [], env={"CHATARCH_AUTO_PROMPT": "0"})
+            assert result.exit_code != 0
+            assert "Missing required value: resource" in result.output
+        """
     )
 
 
@@ -1320,7 +1416,7 @@ def _build_chatarch_agends_md() -> str:
 
             ## CLI Package Standard
 
-            - Use `chatstyle>=0.2.0,<0.3.0` and `chatenv>=0.2.11,<0.3.0` as the ChatArch CLI runtime baseline.
+            - Use `chatstyle>=0.2.1,<0.3.0` and `chatenv>=0.2.11,<0.3.0` as the ChatArch CLI runtime baseline.
             - Root Click commands should set the real command name explicitly, expose `--version`, and use ChatStyle `add_tree_option()` for `--tree` and `--tree-brief`.
             - `--tree` must render the registered Click command surface with signatures; `--tree-brief` must omit signatures while preserving command nodes and descriptions.
             - Keep CLI code thin. Move package capabilities into importable Python APIs and cover them with code tests.
@@ -1468,6 +1564,7 @@ def scaffold_package(
         (tests_dir / "cli-tests").mkdir(parents=True, exist_ok=True)
         (tests_dir / "mock-cli-tests").mkdir(parents=True, exist_ok=True)
         (tests_dir / "code-tests").mkdir(parents=True, exist_ok=True)
+        (project_dir / "examples").mkdir(parents=True, exist_ok=True)
         if include_mkdocs:
             (project_dir / "docs").mkdir(parents=True, exist_ok=True)
         if include_workflows:
@@ -1548,6 +1645,9 @@ def scaffold_package(
                 / "README.md": "# Code Tests\n\nNon-CLI code tests live here.\n",
                 src_dir / "cli.py": _build_chatarch_cli_py(module_name),
                 tests_dir / "test_cli.py": _build_chatarch_test_cli_py(module_name),
+                project_dir / "examples" / "interactive_input.py": _build_chatarch_interactive_example_py(),
+                tests_dir / "test_interactive_example.py": _build_chatarch_test_interactive_example_py(),
+                project_dir / "MANIFEST.in": "recursive-include examples *.py\nrecursive-include tests *.py\n",
                 project_dir / ".github" / "workflows" / "ci.yml": textwrap.dedent(
                     """
                     name: CI

@@ -548,7 +548,7 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert (project_dir / ".github" / "workflows" / "preview.yaml").exists()
     assert "site/" in (project_dir / ".gitignore").read_text(encoding="utf-8")
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"chatstyle>=0.2.0,<0.3.0"' in pyproject_text
+    assert '"chatstyle>=0.2.1,<0.3.0"' in pyproject_text
     assert '"chatenv>=0.2.11,<0.3.0"' in pyproject_text
     assert 'requires-python = ">=3.10"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
@@ -648,6 +648,13 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "HELLO_SCHEMA" not in cli_text
     assert "def hello" not in cli_text
     assert "Hello, ChatArch" not in cli_text
+    assert "@add_interactive_option" not in cli_text
+    example_text = (project_dir / "examples" / "interactive_input.py").read_text(encoding="utf-8")
+    assert '@click.argument("resource", required=False)' in example_text
+    assert "@add_interactive_option" in example_text
+    assert "resolve_command_inputs(" in example_text
+    assert "-i|-I" in example_text
+    assert (project_dir / "tests" / "test_interactive_example.py").exists()
     generated_test_text = (project_dir / "tests" / "test_cli.py").read_text(
         encoding="utf-8"
     )
@@ -689,6 +696,7 @@ def test_chatpypi_init_chatarch_template(tmp_path):
     assert "docs/capability-map.md" in readme_text
     assert "hello ChatArch" not in readme_text
     assert "CommandSchema" in readme_text
+    assert "examples/interactive_input.py" in readme_text
     config_text = (project_dir / "src" / "mychat_cli" / "config.py").read_text(
         encoding="utf-8"
     )
@@ -772,7 +780,7 @@ def test_chatpypi_init_chatarch_can_skip_optional_files(tmp_path):
     assert not (project_dir / "docs").exists()
     assert not (project_dir / ".github").exists()
     pyproject_text = (project_dir / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"chatstyle>=0.2.0,<0.3.0"' in pyproject_text
+    assert '"chatstyle>=0.2.1,<0.3.0"' in pyproject_text
     assert '"chatenv>=0.2.11,<0.3.0"' in pyproject_text
     assert '[project.entry-points."chatenv.configs"]' in pyproject_text
     assert 'mychat_cli = "mychat_cli.config"' in pyproject_text

@@ -195,12 +195,13 @@ chatpypi pkg upload --project-dir ./demo-pkg --token-env PYPI_API_TOKEN
 
 ## 命令行规范
 
-这个模板默认依赖 `chatstyle>=0.2.0,<0.3.0` 和 `chatenv>=0.2.11,<0.3.0`，新增命令应优先使用：
+这个模板默认依赖 `chatstyle>=0.2.1,<0.3.0` 和 `chatenv>=0.2.11,<0.3.0`，新增命令应优先使用：
 
 - `add_tree_option()` 提供共享的 `--tree` / `--tree-brief`，`render_click_tree()` 从已注册 Click 元数据生成命令树。
-- `CommandSchema` / `CommandField` 描述输入。
+- `CommandSchema` / `CommandField` 描述输入，`param_type`可复用Click的范围、选择和路径校验。
 - `add_interactive_option()` 提供统一 `-i/-I`。
 - `resolve_command_inputs()` 统一缺参补问、默认值、TTY 与校验。
+- `chatpypi init -t chatarch` 在源码仓库生成 `examples/interactive_input.py` 和仅测试该示例的 `tests/test_interactive_example.py`。有可补问输入的业务命令才按需移植；不会强制所有命令带交互选项。`-I` 仅禁止提问，不等同于 `--dry-run`。
 - `chatpypi init -t chatarch` 默认生成 `config.py` 和 `chatenv.configs` 入口点；只有明确传 `--without-chatenv-provider` 时才跳过。
 
 ## 目录结构

@@ -1,6 +1,6 @@
 # ChatArch 模板与 Docs Flow
 
-这个页面记录 `chatpypi init -t chatarch` 的模板创建 Flow。它是已实现能力，当前 PR 重点更新 docs 相关模板规范。
+这个页面记录 `chatpypi init -t chatarch` 的模板创建 Flow：生成根 CLI、文档骨架以及可按需接入的 ChatStyle 交互代码。
 
 ## 目标
 
@@ -19,6 +19,8 @@
 │   ├── capability-map.md
 │   ├── capability-map.en.md
 │   └── interface-tree.md
+├── examples/
+│   └── interactive_input.py  # 可选的 ChatStyle 接入示例，不注册到公共 CLI
 └── .github/workflows/
     ├── ci.yml
     ├── deploy.yaml
@@ -40,7 +42,8 @@ chatpypi init my-package -t chatarch --project-dir ./my-package
 - 接入 `mkdocs-static-i18n` suffix 模式。
 - 中文默认站点，英文内容放在 `.en.md` 文件和语言切换入口里。
 - 生成首页导航、CLI 树、能力地图和 Python 接口树。
-- 依赖 `chatstyle>=0.2.0,<0.3.0` 与 `chatenv>=0.2.11,<0.3.0`，并通过 ChatStyle 共享运行时提供 `--tree` 和 `--tree-brief`。
+- 依赖 `chatstyle>=0.2.1,<0.3.0` 与 `chatenv>=0.2.11,<0.3.0`，并通过 ChatStyle 共享运行时提供 `--tree` 和 `--tree-brief`。
+- 生成可单独运行、通过测试的 ChatStyle 交互示例；需要人工补参的命令才移植它，不强制所有业务命令交互，也不往包的根 CLI 注册演示命令。
 - 生成 CI、发布、Preview Docs 和 Deploy Docs workflow。
 - CI 对生成包的 `--version`、`--tree` 和 `--tree-brief` 做 smoke readback。
 - PR preview 使用 `mike deploy dev`。
@@ -70,3 +73,5 @@ chatpypi init my-package -t chatarch \
 - `mkdocs.yml` 必须启用 `attr_list` 和 `md_in_html`，支持 Material grid cards。
 - `preview.yaml` 不应再使用 `github.io`。
 - 生成后的 package 应能通过 `mkdocs build --strict`。
+- `examples/interactive_input.py` 可通过 `python examples/interactive_input.py demo -I` 非交互运行。缺参 `-I` 快速失败；`-i` 无 TTY 失败；自动提问仅在 TTY 且环境允许时启用。`-I` 与是否写入无关；若有副作用，应另行定义安全预检和确认。
+- 示例的`--count 2`复用同一个`click.IntRange(1, 10)`，命令行和人工输入都经过ChatStyle0.2.1的`param_type`校验。生成的`MANIFEST.in`保留源包中的示例及测试，但不注册到业务CLI。
